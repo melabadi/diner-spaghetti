@@ -1,0 +1,38 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "La tablée: dev",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev",
+				"--",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"5173",
+				"--strictPort"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "La tablée: build",
+			"type": "shell",
+			"command": "npm",
+			"args": ["run", "build"],
+			"group": { "kind": "build", "isDefault": true },
+			"problemMatcher": ["$tsc"]
+		},
+		{
+			"label": "La tablée: tests",
+			"type": "shell",
+			"command": "npm",
+			"args": ["test"],
+			"group": { "kind": "test", "isDefault": true },
+			"problemMatcher": []
+		}
+	]
+}

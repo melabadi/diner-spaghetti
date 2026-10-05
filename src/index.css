@@ -1,0 +1,70 @@
+:root {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #2e352e;
+  background: #f8f7f3;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+  --paper: #ffffff;
+  --ink: #2e352e;
+  --muted: #6e756d;
+  --border: #e9e9e1;
+  --green: #23483b;
+  --terracotta: #b55338;
+  --orange-tint: #fbede5;
+  --green-tint: #edf4ee;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
+button { color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #b5533880;
+  outline-offset: 3px;
+}
+input, select, textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dedfd6;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  transition: border-color .15s;
+}
+input:hover, select:hover, textarea:hover { border-color: #b9beb2; }
+input::placeholder, textarea::placeholder { color: #858b82; }
+textarea { resize: vertical; }
+input[type='checkbox'] { accent-color: var(--green); width: 19px; height: 19px; cursor: pointer; flex-shrink: 0; }
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { color: var(--ink); }
+p { line-height: 1.6; }
+svg { flex-shrink: 0; }
+.muted { color: var(--muted); font-size: 13px; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.boot-error { max-width: 600px; margin: 12vh auto; padding: 28px; }
+.boot-error h1 { margin-bottom: 20px; }
+.boot-error button { margin-top: 20px; padding: 10px 20px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
