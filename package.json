@@ -13,9 +13,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@mswjs/interceptors": "^0.45.6",
-    "lucide-react": "^1.49.0",
-    "msw": "^3.0.1",
+    "@mswjs/interceptors": "^0.45.7",
+    "lucide-react": "^1.52.0",
+    "msw": "^3.0.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.6.5"
