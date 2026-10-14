@@ -40,6 +40,12 @@ browser-generated reservation IDs are available.
   mark purchases completed, and distinguish projected profit from cash on hand.
 - **Event settings:** edit the date, location, capacity, prices, spending limit, and
   fundraising goal. Existing reservations keep their original sale prices.
+- **Event day (Jour J):** search and filter arrival status, record partial adult/child
+  arrivals, welcome a whole group, correct arrivals after confirmation, and record
+  outstanding payments separately.
+- **Table planning:** add, rename, resize, and remove empty tables; assign or move
+  whole reservations with live capacity checks. Overfilled tables and duplicate
+  names are rejected.
 - **Persistence:** changes survive reloads in the same browser and origin.
   **Réinitialiser** restores the sample data after confirmation.
 
@@ -127,6 +133,21 @@ All names and `example.test` email addresses are fictional.
    net proceeds with cash on hand.
 6. Change a ticket price in **Paramètres**. Existing bookings do not change.
 7. Reload to demonstrate persistence. Use **Réinitialiser** to start again.
+
+### Event-day walkthrough
+
+1. Open **Jour J** directly or use **Préparer l’accueil et les tables** on the overview.
+2. Assign **Camille Roy** to **Table 1**. All eight reserved seats are held, even
+   though nobody has arrived. A second group cannot overfill that table.
+3. Open Camille's arrival card and enter two adults and one child. The counter
+   becomes **3 / 99**; completing the group makes it **8 / 99**.
+4. Search `emile` or filter **Partiels** to demonstrate the reception desk.
+5. Welcome **Leïla Benali**. Her payment stays pending until you explicitly use
+   **Marquer comme payé**.
+6. Rename or enlarge a table, then move a group. An occupied table cannot be
+   deleted; move its reservations first.
+7. Reload to retain arrivals and seating. Existing datasets start with no arrivals
+   and no table plan rather than losing their old reservations.
 
 ## Tests and checks
 
@@ -225,5 +246,8 @@ These are functional app checks, not an AI decision-quality benchmark.
   recalculate a shopping list.
 - Dietary counts may overlap. They are planning notes, not assurances about
   allergen handling; confirm requirements and precautions with guests.
+- A reservation is assigned to one table as a whole group. There is no split-party
+  seating, automatic placement, seat map, individual ticket scan, or check-in identity
+  verification.
 - Jev, MCP configuration, agent hooks, and AI before/after comparisons are
   intentionally **not included**: that work was deferred in favor of this app.
