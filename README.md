@@ -126,6 +126,56 @@ snapshots, persistence and storage errors, HTTP contracts, and user-facing workf
 The [CI workflow](.github/workflows/ci.yml) runs tests, lint, and a production build
 on pushes to `main` and pull requests.
 
+### Agentic PR review
+
+[GitHub Agentic Workflows](https://github.github.com/gh-aw/) runs a **GPT-5.6 Sol**
+Copilot reviewer on every trusted same-repository PR opening, reopening, new
+commit, edit, and ready-for-review transition. Drafts and every layer of a PR
+stack are included. Fork PRs and actors without repository admin, maintain, or
+write access are excluded; bots are not separately allowlisted. Direct pushes
+do not trigger AI review.
+
+The reviewer reads the complete current PR diff and related code, makes four
+passes over contracts, correctness, security/reliability, and evidence, and
+checks relevant tests or matching CI results when useful. It posts up to ten
+high-confidence inline findings and one advisory `COMMENT` review. Existing
+findings are not reposted. New updates cancel older runs, and the reviewer checks
+the head SHA again before publishing. Incomplete coverage and unavailable checks
+must be disclosed rather than presented as a clean review.
+
+The agent has read-only GitHub access, restricted shell commands, and a network
+allowlist. Separate safe-output jobs publish feedback; it cannot approve, request
+changes, edit branches, or merge. Failures remain visible in Actions rather than
+opening unsolicited tracking issues. Repository-provided custom instructions are
+disabled, and automatic model fallback/token steering are disabled so the
+configured model is not silently replaced. AI review supplements human review
+and the deterministic app checks; it is not a correctness or security guarantee.
+
+**Activation:** in this personal repository, add an Actions repository secret
+named `COPILOT_GITHUB_TOKEN` containing a fine-grained PAT owned by an account
+with an active Copilot license and access to `gpt-5.6-sol`. Grant only the account
+permission **Copilot Requests: Read**; it does not need repository write access.
+Create and store the token in GitHub's settings, never in source or PR comments.
+The built-in `GITHUB_TOKEN` handles repository reads and safe-output reviews.
+Repository/organization policies must permit Actions to submit PR review comments.
+Merge the workflow files into the base branch to activate subsequent PR events.
+Runs consume the token owner's Copilot allowance/credits and have a 30-minute
+agent execution timeout. Missing credentials or unavailable models fail explicitly.
+
+**Maintenance:** edit [.github/workflows/code-review.md](.github/workflows/code-review.md),
+not its generated `.lock.yml`. Use `gh-aw` **v0.88.7**, matching the pinned CI
+installer, then regenerate and commit the source, lock file, and
+`.github/aw/actions-lock.json` action-pin cache together:
+
+```powershell
+gh aw compile code-review --strict --no-check-update
+```
+
+The CI `Agentic workflow source` job recompiles and rejects missing or stale
+generated files.
+When upgrading `gh-aw`, update the CI installer version and immutable action SHA,
+recompile the workflow, and review the generated changes together.
+
 ### Verification findings
 
 - **204 tests passed** across five files, including the actual in-page fetch
