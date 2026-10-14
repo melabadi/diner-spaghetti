@@ -3,6 +3,7 @@ import { summarizeEventDay, type Organizer } from '../domain'
 import type { RunAction } from '../useOrganizer'
 import { ArrivalDesk } from './ArrivalDesk'
 import { SeatingPlan } from './SeatingPlan'
+import { ServiceReports } from './ServiceReports'
 import { StatCard } from './ui'
 
 export function EventDay({ data, busy, run }: { data: Organizer; busy: boolean; run: RunAction }) {
@@ -18,6 +19,7 @@ export function EventDay({ data, busy, run }: { data: Organizer; busy: boolean; 
       <p className="event-day-note">L’accueil, les paiements et les tables sont suivis séparément. Un groupe peut arriver en plusieurs fois; sa table réserve toujours toutes ses places.</p>
       <ArrivalDesk data={data} busy={busy} run={run} />
       <SeatingPlan data={data} busy={busy} run={run} />
+      <ServiceReports data={data} />
     </div>
   )
 }

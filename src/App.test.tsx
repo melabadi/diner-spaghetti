@@ -314,4 +314,51 @@ describe('event-day interface', () => {
     expect(screen.getByLabelText('Capacité de la salle')).toHaveAttribute('min', '180')
     expect(screen.getByText('Au moins 180 places pour les réservations et les tables configurées.')).toBeInTheDocument()
   })
+
+  it('keeps the printable door list complete when the reception search is filtered', async () => {
+    const user = await open('Jour J')
+    await user.type(screen.getByRole('searchbox', { name: 'Rechercher un groupe à l’accueil' }), 'emile')
+    const report = within(screen.getByRole('document', { name: 'Fiche d’accueil' }))
+    expect(report.getByRole('table')).toBeInTheDocument()
+    for (const reservation of store.read().reservations) {
+      expect(report.getByText(reservation.name)).toBeInTheDocument()
+      expect(report.queryByText(reservation.email)).not.toBeInTheDocument()
+    }
+    expect(report.getByText(/99 invités · 0 présents · 99 places à attribuer/)).toBeInTheDocument()
+  })
+
+  it('prints the selected report without changing organizer state', async () => {
+    const user = await open('Jour J')
+    const before = store.read()
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    await user.click(screen.getByRole('button', { name: 'Fiche cuisine' }))
+    expect(screen.getByRole('document', { name: 'Fiche cuisine' })).toBeInTheDocument()
+    expect(screen.queryByRole('document', { name: 'Fiche d’accueil' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Imprimer la fiche' }))
+    expect(print).toHaveBeenCalledTimes(1)
+    expect(store.read()).toEqual(before)
+  })
+
+  it('shows assigned and unassigned groups in kitchen reports without estimating arrived diets', async () => {
+    store.setTable('reservation-1', { tableId: 'table-3' })
+    store.setTable('reservation-2', { tableId: 'table-3' })
+    store.setArrival('reservation-1', { arrivedAdults: 2, arrivedChildren: 1 })
+    const user = await open('Jour J')
+    await user.click(screen.getByRole('button', { name: 'Fiche cuisine' }))
+    const report = within(screen.getByRole('document', { name: 'Fiche cuisine' }))
+    const assigned = within(report.getByRole('row', { name: /^Table 3 / }))
+    expect(assigned.getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['24', '3', '5', '1'])
+    const unassigned = within(report.getByRole('row', { name: /^Sans table / }))
+    expect(unassigned.getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['75', '0', '12', '5'])
+    expect(report.getByText(/pas seulement des personnes arrivées/)).toBeInTheDocument()
+    expect(report.getByText(/Deux tables côte à côte/)).toBeInTheDocument()
+  })
+
+  it('clearly labels an empty door report rather than inventing a guest list', async () => {
+    for (const reservation of store.read().reservations) store.deleteReservation(reservation.id)
+    await open('Jour J')
+    const report = within(screen.getByRole('document', { name: 'Fiche d’accueil' }))
+    expect(report.getByRole('status')).toHaveTextContent('Aucune réservation à imprimer.')
+    expect(report.queryByRole('table')).not.toBeInTheDocument()
+  })
 })

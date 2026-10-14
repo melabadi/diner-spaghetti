@@ -46,6 +46,9 @@ browser-generated reservation IDs are available.
 - **Table planning:** add, rename, resize, and remove empty tables; assign or move
   whole reservations with live capacity checks. Overfilled tables and duplicate
   names are rejected.
+- **Printable service reports:** preview a complete door list or a per-table kitchen
+  sheet and print only the selected report. Reception filters do not hide guests;
+  kitchen totals include unassigned groups and keep planned diets separate from arrivals.
 - **Persistence:** changes survive reloads in the same browser and origin.
   **Réinitialiser** restores the sample data after confirmation.
 
@@ -136,6 +139,10 @@ All names and `example.test` email addresses are fictional.
 
 ### Event-day walkthrough
 
+Start with **Réinitialiser** after confirmation to load the four sample tables.
+To keep an older dataset instead, add tables manually; no bookings are reset
+automatically.
+
 1. Open **Jour J** directly or use **Préparer l’accueil et les tables** on the overview.
 2. Assign **Camille Roy** to **Table 1**. All eight reserved seats are held, even
    though nobody has arrived. A second group cannot overfill that table.
@@ -148,6 +155,42 @@ All names and `example.test` email addresses are fictional.
    deleted; move its reservations first.
 7. Reload to retain arrivals and seating. Existing datasets start with no arrivals
    and no table plan rather than losing their old reservations.
+8. In **Fiches pour l’équipe**, switch between **Fiche d’accueil** and **Fiche cuisine**.
+   Search at the reception desk to show that neither report drops hidden contacts.
+   **Imprimer la fiche** prints only the chosen sheet, not the surrounding controls.
+
+## Copilot demo: one source PR, then a stack
+
+The event-day expansion is deliberately one substantial source PR, organized into
+three ordered feature commits. It can be split during a live demo without making
+artificial or unrelated changes:
+
+| Layer | Reviewable scope | Dependency |
+| --- | --- | --- |
+| 1. Event-day contracts | Schemas, backwards-compatible persistence, table/arrival API, and backend tests | Existing organizer |
+| 2. Reception and seating | Jour J page, partial arrivals, separate payments, table forms, dashboard entry, and interface tests | Layer 1 |
+| 3. Service reports | Door/kitchen projections, selected-sheet printing, report tests, and demo documentation | Layers 1 and 2 |
+
+Open each replacement PR sequentially, bottom to top, with each higher PR based
+on the branch below it. Keep the original source PR until the complete replacement
+chain is verified. The existing agentic-review setup is a prerequisite, not a fourth
+feature slice; if its PR is still open, use its branch as the bottom feature PR's
+base. Once the setup is on `main`, use `main` instead.
+
+The existing **Agentic code review** workflow runs on opening or updating the
+source PR and each stack layer. Configure its credential as described below before
+the demo; missing credentials are an activation failure, not an app defect.
+Keep its review advisory and let real findings drive the demonstration rather
+than inserting intentional bugs.
+
+For **Agent merge**, enable review fixes, CI repairs, and conflict resolution in
+the feature PR's app session when ready to demonstrate them. Leave automatic merging
+off while preparing or splitting the source PR. Agent merge does not provision
+the reviewer's credential.
+
+The [existing mobile-navbar focus issue](https://github.com/melabadi/diner-spaghetti/issues/6)
+is intentionally not fixed by this expansion. It remains a separate task for
+triggering a coding agent without mixing navigation remediation into the feature stack.
 
 ## Tests and checks
 
@@ -160,7 +203,8 @@ npm run build
 
 Tests use Vitest, Testing Library, and the same MSW handlers as the browser.
 They exercise domain calculations, input validation, capacity boundaries, price
-snapshots, persistence and storage errors, HTTP contracts, and user-facing workflows.
+snapshots, persistence and storage errors, HTTP contracts, arrival corrections,
+whole-party seating, complete report projections, and user-facing workflows.
 The [CI workflow](.github/workflows/ci.yml) runs tests, lint, and a production build
 on pushes to `main` and pull requests.
 
@@ -216,7 +260,7 @@ recompile the workflow, and review the generated changes together.
 
 ### Verification findings
 
-- **204 tests passed** across five files, including the actual in-page fetch
+- **294 tests passed** across six files, including the actual in-page fetch
   transport. Passthrough tests use two temporary loopback HTTP servers, so both
   static requests and requests to another origin are verified without external traffic.
 - **Lint, TypeScript checks, and the production build passed.** Browser source and
@@ -224,10 +268,18 @@ recompile the workflow, and review the generated changes together.
 - **Production-browser workflows passed:** adding two adult tickets and one child
   ticket charged exactly $46; marking that booking paid, adding a volunteer, and
   adding and purchasing a $12.50 expense all survived a full reload.
+- **Event-day production-browser checks passed:** two adults and one child arrived
+  in Camille's group, its eight seats stayed assigned to Table 1, and both updates
+  survived a full reload without changing the original payment or price snapshot.
+  The new page fit 320 px and 390 px viewports with scrolling contained inside tables.
+- **Report print-media checks passed:** the door sheet kept all eight bookings
+  while the reception filter showed only one. Both selected sheets hid navigation,
+  forms, and controls and fit an A4-width viewport without horizontal overflow.
+  Kitchen totals included unassigned guests and kept planned diets independent of arrivals.
 - **Background-tab check passed:** the production page returned HTTP 200 JSON
   before and after 45 seconds idle while hidden, with payment and purchase state
   intact and no service worker registered.
-- **All four sections fit 320 px and 390 px viewports** without whole-page
+- **The original four sections fit 320 px and 390 px viewports** without whole-page
   horizontal overflow. The reservation table scrolls inside its own container.
   Browser testing caught and fixed an overflow caused by an absolutely positioned
   screen-reader-only table header. Stress checks also passed with 2,000 reserved

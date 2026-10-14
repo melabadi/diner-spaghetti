@@ -213,6 +213,20 @@ tbody td { padding: 16px 10px; vertical-align: middle; }
 .table-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 9px; }
 .table-guests { padding: 0; margin: 0 0 17px; list-style: none; font-size: 11px; line-height: 1.8; }
 .seating-heading { margin: 25px 0 16px; font-size: 14px; }
+.report-help { margin-bottom: 20px; }
+.service-report { border: 1px dashed #c7cfbf; border-radius: 8px; padding: 20px; }
+.report-heading h2 { font-size: 20px; margin-bottom: 9px; }
+.report-heading h3 { font-size: 14px; margin-bottom: 6px; }
+.report-heading p { font-size: 11px; }
+.report-totals { margin-top: 13px; font-weight: 600; }
+.service-report .table-scroll { margin: 18px -20px; }
+.report-table tbody th, .report-table td { vertical-align: top; }
+.report-table tfoot { border-top: 2px solid var(--border); font-weight: 600; }
+.report-table tfoot th, .report-table tfoot td { padding: 14px 10px; }
+.report-note { display: block; max-width: 240px; margin-top: 5px; font-size: 10px; line-height: 1.6; font-weight: 400; }
+.report-notes h3 { font-size: 13px; margin-top: 17px; }
+.report-notes ul { padding-left: 18px; font-size: 11px; line-height: 1.8; }
+.report-updated { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 18px; }
 
 @media (min-width: 1800px) {
   .main-content { margin: 0 auto; padding: 0 60px; }
@@ -322,4 +336,26 @@ tbody td { padding: 16px 10px; vertical-align: middle; }
   .recent-row .badge { font-size: 8px; padding-inline: 5px; }
   .recent-row strong { font-size: 10px; }
   .goal-amount { font-size: 29px; }
+}
+
+@page { margin: 12mm; }
+@media print {
+  body { background: white; min-width: 0; }
+  .app-shell { display: block; min-height: 0; }
+  .sidebar, .topbar, .page-header, .skip-link, .feedback, .saving-status, .page-footer,
+  .event-day-summary, .event-day-note, .arrival-desk, .seating-plan, .report-controls,
+  #event-settings { display: none !important; }
+  .main-content { width: 100%; max-width: none; margin: 0; padding: 0; }
+  .event-day-page { display: block; }
+  .service-reports, .service-report { margin: 0; padding: 0; border: 0; border-radius: 0; }
+  .service-report, .service-report h2, .service-report h3, .service-report .field-hint { color: black; }
+  .service-report .table-scroll { margin: 16px 0; overflow: visible; }
+  .report-table { table-layout: fixed; font-size: 9pt; }
+  .report-table thead { display: table-header-group; background: none; }
+  .report-table tfoot { display: table-row-group; }
+  .report-table tr { break-inside: avoid; }
+  .report-table th, .report-table td, .report-table tfoot th, .report-table tfoot td { padding: 3mm 2mm; color: black; font-size: inherit; white-space: normal; }
+  .report-table tbody th { min-width: 0; }
+  .report-note { max-width: none; font-size: inherit; }
+  .report-heading { break-after: avoid; }
 }
