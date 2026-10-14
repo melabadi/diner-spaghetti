@@ -64,6 +64,10 @@ with the page instead of relying on a background worker or keepalive timers.
 [Handlers](src/mocks/handlers.ts) call a [local store](src/mocks/store.ts),
 which validates inputs and persisted data against [shared Zod schemas](src/domain.ts).
 The state is stored under `la-tablee.organizer.v1` in `localStorage`.
+Existing datasets remain readable: absent arrival counts become zero, absent
+table assignments become `null`, and an absent table plan becomes an empty list.
+The next successful mutation persists those additive fields without resetting
+bookings, payments, or price snapshots.
 Invalid requests return HTTP 400, missing records return 404, capacity/assignment
 conflicts return 409, and storage failures return 500 with visible error messages.
 Corrupt data is not silently discarded; an explicit reset recovers it.
@@ -74,6 +78,10 @@ Corrupt data is not silently discarded; an explicit reset recovers it.
 | PUT | `/api/event` | Update event settings |
 | POST | `/api/reservations` | Create a reservation |
 | PATCH / DELETE | `/api/reservations/:id` | Change payment / cancel |
+| PUT | `/api/reservations/:id/arrival` | Set absolute adult/child arrival counts |
+| PATCH | `/api/reservations/:id/table` | Assign the whole party or clear its table |
+| POST | `/api/tables` | Create a table |
+| PUT / DELETE | `/api/tables/:id` | Rename/resize a table or remove an empty table |
 | POST | `/api/volunteers` | Assign a volunteer |
 | DELETE | `/api/volunteers/:id` | Remove an assignment |
 | POST | `/api/expenses` | Add a shopping/budget item |
@@ -84,6 +92,13 @@ Mutating routes return the complete updated state. Money is stored as integer
 cents, not floating-point dollar amounts. The API client is isolated in
 [src/api.ts](src/api.ts), so a future real backend can replace the mock while
 preserving the same HTTP contract and validation.
+
+Arrival bodies contain `arrivedAdults` and `arrivedChildren`; repeating the same
+counts never adds guests twice. Arrivals may be partial and never mark a payment
+received. Seating bodies contain `tableId` (or `null` to unassign). Tables reserve
+space for the **entire booking**, not just its arrivals. An occupied table cannot
+be deleted or resized below its assigned guests, and total table capacity cannot
+exceed the venue capacity. These constraints also validate persisted data.
 
 ### Sample data
 
@@ -98,6 +113,8 @@ All names and `example.test` email addresses are fictional.
 | Planned expenses | $620.00 |
 | Projected net proceeds | $978.00 |
 | Volunteer assignments / required | 8 / 16 |
+| Arrived guests / reserved guests | 0 / 99 |
+| Tables / configured table seats | 4 / 72 |
 
 ## A quick demo
 

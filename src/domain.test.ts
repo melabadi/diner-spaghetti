@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  eventSchema, normalizeText, reservationInputSchema, summarize, toCents,
+  arrivalStatus, eventSchema, normalizeText, organizerSchema, reservationInputSchema,
+  reservationsByName, summarize, summarizeEventDay, tableInputSchema, tableOccupancy, toCents,
   type ReservationInput,
 } from './domain'
 import { createSeed } from './mocks/seed'
@@ -231,4 +232,91 @@ describe('eventSchema', () => {
       expect(eventSchema.safeParse({ ...createSeed().event, [field]: value }).success).toBe(false)
     },
   )
+})
+
+describe('event-day contracts', () => {
+  it('reads pre-event-day data without resetting reservations or inventing arrivals', () => {
+    const seed = createSeed()
+    const result = organizerSchema.parse({
+      ...seed,
+      tables: undefined,
+      reservations: seed.reservations.map((item) => ({
+        ...item, arrivedAdults: undefined, arrivedChildren: undefined, tableId: undefined,
+      })),
+    })
+    expect(result.tables).toEqual([])
+    expect(result.reservations).toEqual(seed.reservations)
+    expect(summarize(result)).toEqual(summarize(seed))
+  })
+
+  it('counts people, whole-party seating, and complete arrivals independently of payment', () => {
+    const data = createSeed()
+    expect(summarizeEventDay(data)).toEqual({
+      totalGuests: 99, arrivedGuests: 0, waitingGuests: 99,
+      fullyArrivedReservations: 0, assignedGuests: 0, unassignedGuests: 99, tableSeats: 72,
+    })
+    Object.assign(data.reservations[0], { arrivedAdults: 2, arrivedChildren: 1, tableId: 'table-3' })
+    Object.assign(data.reservations[1], { arrivedAdults: 12, arrivedChildren: 4, tableId: 'table-3' })
+    expect(arrivalStatus(data.reservations[0])).toBe('partial')
+    expect(arrivalStatus(data.reservations[1])).toBe('arrived')
+    expect(arrivalStatus(data.reservations[2])).toBe('waiting')
+    expect(tableOccupancy(data, 'table-3')).toBe(24)
+    expect(summarizeEventDay(data)).toEqual({
+      totalGuests: 99, arrivedGuests: 19, waitingGuests: 80,
+      fullyArrivedReservations: 1, assignedGuests: 24, unassignedGuests: 75, tableSeats: 72,
+    })
+    expect(summarize(data)).toEqual(summarize(createSeed()))
+  })
+
+  it('handles an empty dinner without inventing arrivals or seating', () => {
+    expect(summarizeEventDay({ ...createSeed(), reservations: [], tables: [] })).toEqual({
+      totalGuests: 0, arrivedGuests: 0, waitingGuests: 0,
+      fullyArrivedReservations: 0, assignedGuests: 0, unassignedGuests: 0, tableSeats: 0,
+    })
+  })
+
+  it('sorts a copy of reservations by French contact name', () => {
+    const data = createSeed()
+    const original = [...data.reservations]
+    const sorted = reservationsByName(data.reservations)
+    expect(sorted.map((item) => item.name)).toEqual([
+      'Alice Moreau', 'Camille Roy', 'Collectif des voisins', 'Émile Côté',
+      'Léa Nguyen', 'Leïla Benali', 'Nicolas Dubois', 'Thomas Gagnon',
+    ])
+    expect(data.reservations).toEqual(original)
+  })
+
+  it.each([
+    { label: 'too many adults arriving', reservation: { arrivedAdults: 7 } },
+    { label: 'too many children arriving', reservation: { arrivedChildren: 3 } },
+    { label: 'negative arrivals', reservation: { arrivedAdults: -1 } },
+    { label: 'fractional arrivals', reservation: { arrivedChildren: 0.5 } },
+    { label: 'null arrivals', reservation: { arrivedAdults: null } },
+    { label: 'missing assigned table', reservation: { tableId: 'missing' } },
+    { label: 'overfilled table', reservation: { tableId: 'table-1', adults: 9 } },
+  ])('rejects persisted $label', ({ reservation }) => {
+    const data = createSeed()
+    expect(organizerSchema.safeParse({
+      ...data, reservations: [{ ...data.reservations[0], ...reservation }],
+    }).success).toBe(false)
+  })
+
+  it.each([
+    { label: 'duplicate table IDs', tables: [{ id: 'table-1', label: 'Voisins', capacity: 8 }, { id: 'table-1', label: 'Amis', capacity: 8 }] },
+    { label: 'duplicate normalized names', tables: [{ id: 'one', label: 'Marché', capacity: 8 }, { id: 'two', label: '  MARCHE  ', capacity: 8 }] },
+    { label: 'seating beyond venue capacity', tables: [{ id: 'one', label: 'Grande tablée', capacity: 181 }] },
+  ])('rejects $label in stored data', ({ tables }) => {
+    expect(organizerSchema.safeParse({ ...createSeed(), tables }).success).toBe(false)
+  })
+
+  it.each([
+    { label: 'empty name', input: { label: ' ' } },
+    { label: 'long name', input: { label: 'a'.repeat(61) } },
+    { label: 'zero seats', input: { capacity: 0 } },
+    { label: 'fractional seats', input: { capacity: 1.5 } },
+    { label: 'excessive seats', input: { capacity: 2001 } },
+    { label: 'server-owned ID', input: { id: 'injected' } },
+  ])('rejects $label when creating tables', ({ input }) => {
+    expect(tableInputSchema.safeParse({ label: 'Voisins', capacity: 8, ...input }).success).toBe(false)
+  })
 })

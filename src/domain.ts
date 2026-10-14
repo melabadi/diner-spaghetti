@@ -48,12 +48,38 @@ function checkMeals(
 }
 
 export const reservationInputSchema = z.object(reservationFields).strict().superRefine(checkMeals)
+export const arrivalInputSchema = z.object({
+  arrivedAdults: count,
+  arrivedChildren: count,
+}).strict()
+export const seatingInputSchema = z.object({
+  tableId: z.string().min(1).nullable(),
+}).strict()
 export const reservationSchema = z.object({
   ...reservationFields,
   id: z.string().min(1),
   totalCents: z.number().int().min(0).max(200_000_000_000),
   createdAt: z.iso.datetime(),
-}).strict().superRefine(checkMeals)
+  arrivedAdults: count.default(0),
+  arrivedChildren: count.default(0),
+  tableId: seatingInputSchema.shape.tableId.default(null),
+}).strict().superRefine((value, context) => {
+  checkMeals(value, context)
+  for (const [arrived, reserved] of [['arrivedAdults', 'adults'], ['arrivedChildren', 'children']] as const) {
+    if (value[arrived] > value[reserved]) {
+      context.addIssue({
+        code: 'custom', path: [arrived],
+        message: 'Les arrivées ne peuvent pas dépasser les billets réservés.',
+      })
+    }
+  }
+})
+
+export const tableInputSchema = z.object({
+  label: z.string().trim().min(2, 'Nommez la table avec au moins deux caractères.').max(60),
+  capacity: z.number().int('Utilisez un nombre entier.').min(1).max(2000),
+}).strict()
+export const tableSchema = tableInputSchema.extend({ id: z.string().min(1) })
 
 export const shiftSchema = z.object({
   id: z.string().min(1),
@@ -85,12 +111,54 @@ export const organizerSchema = z.object({
   shifts: z.array(shiftSchema),
   volunteers: z.array(volunteerSchema),
   expenses: z.array(expenseSchema),
+  tables: z.array(tableSchema).default([]),
   updatedAt: z.iso.datetime(),
-}).strict()
+}).strict().superRefine((data, context) => {
+  const ids = new Set<string>()
+  const labels = new Set<string>()
+  const occupancy = new Map<string, number>()
+  data.tables.forEach((table, index) => {
+    if (ids.has(table.id) || labels.has(normalizeText(table.label))) {
+      context.addIssue({
+        code: 'custom', path: ['tables', index],
+        message: 'Chaque table doit avoir un identifiant et un nom uniques.',
+      })
+    }
+    ids.add(table.id)
+    labels.add(normalizeText(table.label))
+  })
+  data.reservations.forEach((reservation, index) => {
+    if (reservation.tableId === null) return
+    if (!ids.has(reservation.tableId)) {
+      context.addIssue({
+        code: 'custom', path: ['reservations', index, 'tableId'],
+        message: 'La table attribuée n’existe pas.',
+      })
+    }
+    occupancy.set(reservation.tableId, (occupancy.get(reservation.tableId) ?? 0) + reservation.adults + reservation.children)
+  })
+  data.tables.forEach((table, index) => {
+    if ((occupancy.get(table.id) ?? 0) > table.capacity) {
+      context.addIssue({
+        code: 'custom', path: ['tables', index, 'capacity'],
+        message: 'Une table ne peut pas accueillir plus de places que sa capacité.',
+      })
+    }
+  })
+  if (data.tables.reduce((sum, table) => sum + table.capacity, 0) > data.event.capacity) {
+    context.addIssue({
+      code: 'custom', path: ['tables'],
+      message: 'Les places aux tables ne peuvent pas dépasser la capacité de la salle.',
+    })
+  }
+})
 
 export type EventSettings = z.infer<typeof eventSchema>
 export type ReservationInput = z.infer<typeof reservationInputSchema>
 export type Reservation = z.infer<typeof reservationSchema>
+export type ArrivalInput = z.infer<typeof arrivalInputSchema>
+export type TableInput = z.infer<typeof tableInputSchema>
+export type DiningTable = z.infer<typeof tableSchema>
 export type VolunteerInput = z.infer<typeof volunteerInputSchema>
 export type ExpenseInput = z.infer<typeof expenseInputSchema>
 export type Organizer = z.infer<typeof organizerSchema>
@@ -122,6 +190,37 @@ export function summarize(data: Organizer) {
     vegetarian: data.reservations.reduce((sum, item) => sum + item.vegetarian, 0),
     glutenFree: data.reservations.reduce((sum, item) => sum + item.glutenFree, 0),
   }
+}
+
+export function arrivalStatus(reservation: Reservation): 'waiting' | 'partial' | 'arrived' {
+  const arrived = reservation.arrivedAdults + reservation.arrivedChildren
+  if (arrived === 0) return 'waiting'
+  return arrived === reservation.adults + reservation.children ? 'arrived' : 'partial'
+}
+
+export function tableOccupancy(data: Organizer, tableId: string) {
+  return data.reservations.filter((item) => item.tableId === tableId)
+    .reduce((sum, item) => sum + item.adults + item.children, 0)
+}
+
+export function summarizeEventDay(data: Organizer) {
+  const totalGuests = summarize(data).guests
+  const arrivedGuests = data.reservations.reduce((sum, item) => sum + item.arrivedAdults + item.arrivedChildren, 0)
+  const assignedGuests = data.reservations.filter((item) => item.tableId !== null)
+    .reduce((sum, item) => sum + item.adults + item.children, 0)
+  return {
+    totalGuests,
+    arrivedGuests,
+    waitingGuests: totalGuests - arrivedGuests,
+    fullyArrivedReservations: data.reservations.filter((item) => arrivalStatus(item) === 'arrived').length,
+    assignedGuests,
+    unassignedGuests: totalGuests - assignedGuests,
+    tableSeats: data.tables.reduce((sum, table) => sum + table.capacity, 0),
+  }
+}
+
+export function reservationsByName(reservations: readonly Reservation[]) {
+  return [...reservations].sort((a, b) => a.name.localeCompare(b.name, 'fr-CA'))
 }
 
 export function formatMoney(cents: number) {

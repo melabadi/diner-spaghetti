@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ZodError } from 'zod'
-import { organizerSchema, summarize, type ReservationInput } from '../domain'
+import { organizerSchema, summarize, summarizeEventDay, tableOccupancy, type ReservationInput } from '../domain'
 import { createSeed } from './seed'
 import { ApiError, OrganizerStore, STORAGE_KEY, type StorageAdapter } from './store'
 
@@ -372,5 +372,149 @@ describe('storage errors and recovery', () => {
     const retried = store.addReservation(reservation)
     expect(retried.reservations).toHaveLength(before.reservations.length + 1)
     expect(new OrganizerStore(storage).read()).toEqual(retried)
+  })
+})
+
+describe('event-day persistence and arrivals', () => {
+  it('upgrades legacy fields on the next save without discarding existing bookings', () => {
+    const seed = createSeed()
+    const raw = JSON.stringify({
+      ...seed, tables: undefined,
+      reservations: seed.reservations.map((item) => ({
+        ...item, arrivedAdults: undefined, arrivedChildren: undefined, tableId: undefined,
+      })),
+    })
+    storage.setItem(STORAGE_KEY, raw)
+    expect(store.read()).toEqual({ ...seed, tables: [] })
+    expect(storage.getItem(STORAGE_KEY)).toBe(raw)
+    const updated = store.addTable({ label: 'Table des voisins', capacity: 8 })
+    expect(updated.reservations).toEqual(seed.reservations)
+    expect(new OrganizerStore(storage).read()).toEqual(updated)
+    expect(storage.getItem(STORAGE_KEY)).toBe(JSON.stringify(updated))
+  })
+
+  it('sets absolute arrival counts idempotently and does not alter payment or seating', () => {
+    const original = store.setTable('reservation-3', { tableId: 'table-2' })
+    const arrived = store.setArrival('reservation-3', { arrivedAdults: 2, arrivedChildren: 1 })
+    expect(arrived.reservations[2]).toMatchObject({
+      arrivedAdults: 2, arrivedChildren: 1, tableId: 'table-2', paymentStatus: 'pending',
+    })
+    expect(summarize(arrived)).toEqual(summarize(original))
+    const repeated = store.setArrival('reservation-3', { arrivedAdults: 2, arrivedChildren: 1 })
+    expect(summarizeEventDay(repeated).arrivedGuests).toBe(3)
+    expect(new OrganizerStore(storage).read()).toEqual(repeated)
+    const cleared = store.setArrival('reservation-3', { arrivedAdults: 0, arrivedChildren: 0 })
+    expect(cleared.reservations).toEqual(original.reservations)
+  })
+
+  it.each([
+    { arrivedAdults: 7, arrivedChildren: 0 },
+    { arrivedAdults: 0, arrivedChildren: 3 },
+  ])('rejects arrivals beyond reserved ticket types without saving: %j', (input) => {
+    const before = store.read()
+    const raw = storage.getItem(STORAGE_KEY)
+    expectApiError(() => store.setArrival('reservation-1', input), 409, 'arrival_conflict')
+    expect(store.read()).toEqual(before)
+    expect(storage.getItem(STORAGE_KEY)).toBe(raw)
+  })
+
+  it.each([
+    { arrivedAdults: -1, arrivedChildren: 0 },
+    { arrivedAdults: 0, arrivedChildren: 0.5 },
+    { arrivedAdults: 1 },
+    { arrivedAdults: 1, arrivedChildren: 0, paymentStatus: 'paid' },
+  ])('rejects invalid arrival inputs atomically: %j', (input) => {
+    const before = store.read()
+    expect(() => store.setArrival('reservation-1', input)).toThrow(ZodError)
+    expect(store.read()).toEqual(before)
+  })
+
+  it('reports corrupt event-day storage rather than silently clearing arrivals', () => {
+    const seed = createSeed()
+    const raw = JSON.stringify({
+      ...seed, reservations: [{ ...seed.reservations[0], arrivedAdults: 7 }],
+    })
+    storage.setItem(STORAGE_KEY, raw)
+    expectApiError(() => store.read(), 500, 'storage_corrupt')
+    expect(storage.getItem(STORAGE_KEY)).toBe(raw)
+  })
+})
+
+describe('whole-party seating', () => {
+  it('fills an exact-capacity table and does not double-count a repeated assignment', () => {
+    const assigned = store.setTable('reservation-1', { tableId: 'table-1' })
+    expect(tableOccupancy(assigned, 'table-1')).toBe(8)
+    const repeated = store.setTable('reservation-1', { tableId: 'table-1' })
+    expect(tableOccupancy(repeated, 'table-1')).toBe(8)
+    expect(summarizeEventDay(repeated).assignedGuests).toBe(8)
+    expect(new OrganizerStore(storage).read()).toEqual(repeated)
+  })
+
+  it('moves and unassigns a party without changing its arrival or financial state', () => {
+    store.setArrival('reservation-1', { arrivedAdults: 2, arrivedChildren: 1 })
+    store.setTable('reservation-1', { tableId: 'table-1' })
+    const moved = store.setTable('reservation-1', { tableId: 'table-3' })
+    expect(tableOccupancy(moved, 'table-1')).toBe(0)
+    expect(tableOccupancy(moved, 'table-3')).toBe(8)
+    expect(moved.reservations[0]).toMatchObject({ arrivedAdults: 2, arrivedChildren: 1 })
+    const unassigned = store.setTable('reservation-1', { tableId: null })
+    expect(summarizeEventDay(unassigned).assignedGuests).toBe(0)
+    expect(summarize(unassigned)).toEqual(summarize(createSeed()))
+  })
+
+  it('rejects an overfilled destination without losing the previous assignment', () => {
+    store.setTable('reservation-1', { tableId: 'table-1' })
+    const before = store.setTable('reservation-2', { tableId: 'table-2' })
+    const raw = storage.getItem(STORAGE_KEY)
+    expectApiError(() => store.setTable('reservation-1', { tableId: 'table-2' }), 409, 'table_full')
+    expect(store.read()).toEqual(before)
+    expect(storage.getItem(STORAGE_KEY)).toBe(raw)
+  })
+
+  it('frees table capacity when the associated reservation is deleted', () => {
+    store.setTable('reservation-1', { tableId: 'table-1' })
+    const deleted = store.deleteReservation('reservation-1')
+    expect(tableOccupancy(deleted, 'table-1')).toBe(0)
+    expect(store.deleteTable('table-1').tables.some((item) => item.id === 'table-1')).toBe(false)
+  })
+
+  it('cannot shrink or delete an occupied table until its groups have moved', () => {
+    const before = store.setTable('reservation-1', { tableId: 'table-1' })
+    expectApiError(() => store.updateTable('table-1', { label: 'Voisins', capacity: 7 }), 409, 'table_capacity_conflict')
+    expectApiError(() => store.deleteTable('table-1'), 409, 'table_in_use')
+    expect(store.read()).toEqual(before)
+    const renamed = store.updateTable('table-1', { label: 'Table des voisins', capacity: 8 })
+    expect(renamed.reservations[0].tableId).toBe('table-1')
+    store.setTable('reservation-1', { tableId: null })
+    store.updateTable('table-1', { label: 'Voisins', capacity: 7 })
+    expect(store.deleteTable('table-1').tables).toHaveLength(3)
+  })
+
+  it('rejects duplicate accent- and case-insensitive table names', () => {
+    const before = store.addTable({ label: 'Table du marché', capacity: 8 })
+    expectApiError(() => store.addTable({ label: '  TABLE DU MARCHE  ', capacity: 8 }), 409, 'duplicate_table')
+    expectApiError(() => store.updateTable('table-1', { label: 'Table du marché', capacity: 8 }), 409, 'duplicate_table')
+    expect(store.read()).toEqual(before)
+  })
+
+  it('permits seating exactly at venue capacity and rejects further additions or venue reductions', () => {
+    const full = store.addTable({ label: 'Grande tablée', capacity: 108 })
+    expect(summarizeEventDay(full).tableSeats).toBe(180)
+    expectApiError(() => store.addTable({ label: 'Encore une place', capacity: 1 }), 409, 'seating_capacity_conflict')
+    expectApiError(() => store.updateTable('table-1', { label: 'Table 1', capacity: 9 }), 409, 'seating_capacity_conflict')
+    expectApiError(() => store.updateEvent({ ...full.event, capacity: 179 }), 409, 'seating_capacity_conflict')
+    expect(store.read()).toEqual(full)
+  })
+
+  it.each([
+    { action: () => store.setArrival('missing', { arrivedAdults: 0, arrivedChildren: 0 }) },
+    { action: () => store.setTable('missing', { tableId: null }) },
+    { action: () => store.setTable('reservation-1', { tableId: 'missing' }) },
+    { action: () => store.updateTable('missing', { label: 'Voisins', capacity: 8 }) },
+    { action: () => store.deleteTable('missing') },
+  ])('reports missing event-day records without saving', ({ action }) => {
+    const before = store.read()
+    expectApiError(action, 404, 'not_found')
+    expect(store.read()).toEqual(before)
   })
 })

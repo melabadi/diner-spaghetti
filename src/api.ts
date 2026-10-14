@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import {
   organizerSchema,
-  type EventSettings, type ExpenseInput, type ReservationInput, type VolunteerInput,
+  type ArrivalInput, type EventSettings, type ExpenseInput, type ReservationInput,
+  type TableInput, type VolunteerInput,
 } from './domain'
 
 const errorSchema = z.object({ error: z.string(), code: z.string() })
@@ -47,6 +48,13 @@ export const api = {
   setPayment: (id: string, paymentStatus: ReservationInput['paymentStatus']) =>
     request(`/reservations/${encodeURIComponent(id)}`, json('PATCH', { paymentStatus })),
   deleteReservation: (id: string) => request(`/reservations/${encodeURIComponent(id)}`, json('DELETE')),
+  setArrival: (id: string, arrival: ArrivalInput) =>
+    request(`/reservations/${encodeURIComponent(id)}/arrival`, json('PUT', arrival)),
+  setTable: (id: string, tableId: string | null) =>
+    request(`/reservations/${encodeURIComponent(id)}/table`, json('PATCH', { tableId })),
+  addTable: (table: TableInput) => request('/tables', json('POST', table)),
+  updateTable: (id: string, table: TableInput) => request(`/tables/${encodeURIComponent(id)}`, json('PUT', table)),
+  deleteTable: (id: string) => request(`/tables/${encodeURIComponent(id)}`, json('DELETE')),
   addVolunteer: (volunteer: VolunteerInput) => request('/volunteers', json('POST', volunteer)),
   deleteVolunteer: (id: string) => request(`/volunteers/${encodeURIComponent(id)}`, json('DELETE')),
   addExpense: (expense: ExpenseInput) => request('/expenses', json('POST', expense)),

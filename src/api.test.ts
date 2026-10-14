@@ -65,7 +65,7 @@ describe('mock API success responses', () => {
   })
 
   const creations: Array<RequestCase & {
-    collection: 'reservations' | 'volunteers' | 'expenses'
+    collection: 'reservations' | 'volunteers' | 'expenses' | 'tables'
     expected: Record<string, unknown>
   }> = [
     {
@@ -91,6 +91,14 @@ describe('mock API success responses', () => {
       input: expense,
       collection: 'expenses',
       expected: { ...expense, purchased: false },
+    },
+    {
+      label: 'table',
+      path: '/tables',
+      method: 'POST',
+      input: { label: 'Table des voisins', capacity: 8 },
+      collection: 'tables',
+      expected: { label: 'Table des voisins', capacity: 8 },
     },
   ]
 
@@ -123,10 +131,11 @@ describe('mock API success responses', () => {
     expect(summarize(result).paidExpenseCents).toBe(29_100)
   })
 
-  const deletions: Array<{ id: string; collection: 'reservations' | 'volunteers' | 'expenses' }> = [
+  const deletions: Array<{ id: string; collection: 'reservations' | 'volunteers' | 'expenses' | 'tables' }> = [
     { id: 'reservation-1', collection: 'reservations' },
     { id: 'volunteer-1', collection: 'volunteers' },
     { id: 'expense-1', collection: 'expenses' },
+    { id: 'table-1', collection: 'tables' },
   ]
 
   it.each(deletions)('deletes $id with status 200', async ({ id, collection }) => {
@@ -169,6 +178,14 @@ describe('mock API validation', () => {
       label: 'additional purchase fields', path: '/expenses/expense-1', method: 'PATCH',
       input: { purchased: true, amountCents: 0 },
     },
+    { label: 'negative arrivals', path: '/reservations/reservation-1/arrival', method: 'PUT', input: { arrivedAdults: -1, arrivedChildren: 0 } },
+    { label: 'incomplete arrivals', path: '/reservations/reservation-1/arrival', method: 'PUT', input: { arrivedAdults: 1 } },
+    { label: 'injected arrival fields', path: '/reservations/reservation-1/arrival', method: 'PUT', input: { arrivedAdults: 1, arrivedChildren: 0, paymentStatus: 'paid' } },
+    { label: 'invalid table reference', path: '/reservations/reservation-1/table', method: 'PATCH', input: { tableId: '' } },
+    { label: 'absent table reference', path: '/reservations/reservation-1/table', method: 'PATCH', input: {} },
+    { label: 'zero table capacity', path: '/tables', method: 'POST', input: { label: 'Voisins', capacity: 0 } },
+    { label: 'injected table ID', path: '/tables', method: 'POST', input: { label: 'Voisins', capacity: 8, id: 'injected' } },
+    { label: 'fractional table capacity', path: '/tables/table-1', method: 'PUT', input: { label: 'Voisins', capacity: 1.5 } },
   ]
 
   it.each(invalidRequests)('returns 400 validation_error for $label without saving', async ({ path, method, input }) => {
@@ -184,6 +201,10 @@ describe('mock API validation', () => {
     { label: 'volunteer creation', path: '/volunteers', method: 'POST' },
     { label: 'expense creation', path: '/expenses', method: 'POST' },
     { label: 'purchase update', path: '/expenses/expense-1', method: 'PATCH' },
+    { label: 'arrival update', path: '/reservations/reservation-1/arrival', method: 'PUT' },
+    { label: 'seating update', path: '/reservations/reservation-1/table', method: 'PATCH' },
+    { label: 'table creation', path: '/tables', method: 'POST' },
+    { label: 'table update', path: '/tables/table-1', method: 'PUT' },
   ]
 
   it.each(bodyRoutes)('returns 400 invalid_json for malformed JSON during $label', async ({ path, method }) => {
@@ -224,6 +245,31 @@ describe('mock API conflicts and missing records', () => {
         store.addVolunteer({ name: 'Louise Roy', shiftId: 'kitchen' })
       },
     },
+    {
+      label: 'excessive arrivals', path: '/reservations/reservation-1/arrival', method: 'PUT',
+      input: { arrivedAdults: 7, arrivedChildren: 0 }, code: 'arrival_conflict',
+    },
+    {
+      label: 'overfilled table', path: '/reservations/reservation-3/table', method: 'PATCH',
+      input: { tableId: 'table-1' }, code: 'table_full',
+    },
+    {
+      label: 'occupied table deletion', path: '/tables/table-1', method: 'DELETE', code: 'table_in_use',
+      prepare: () => { store.setTable('reservation-1', { tableId: 'table-1' }) },
+    },
+    {
+      label: 'occupied table reduction', path: '/tables/table-1', method: 'PUT',
+      input: { label: 'Table 1', capacity: 7 }, code: 'table_capacity_conflict',
+      prepare: () => { store.setTable('reservation-1', { tableId: 'table-1' }) },
+    },
+    {
+      label: 'duplicate table', path: '/tables', method: 'POST',
+      input: { label: '  TABLE 1  ', capacity: 8 }, code: 'duplicate_table',
+    },
+    {
+      label: 'seating beyond venue capacity', path: '/tables', method: 'POST',
+      input: { label: 'Grande tablée', capacity: 109 }, code: 'seating_capacity_conflict',
+    },
   ]
 
   it.each(conflicts)('returns 409 for $label without saving', async ({ path, method, input, code, prepare }) => {
@@ -248,6 +294,11 @@ describe('mock API conflicts and missing records', () => {
     { label: 'missing volunteer deletion', path: '/volunteers/missing', method: 'DELETE' },
     { label: 'missing expense purchase', path: '/expenses/missing', method: 'PATCH', input: { purchased: true } },
     { label: 'missing expense deletion', path: '/expenses/missing', method: 'DELETE' },
+    { label: 'missing arrival', path: '/reservations/missing/arrival', method: 'PUT', input: { arrivedAdults: 0, arrivedChildren: 0 } },
+    { label: 'missing seating', path: '/reservations/missing/table', method: 'PATCH', input: { tableId: null } },
+    { label: 'missing table assignment', path: '/reservations/reservation-1/table', method: 'PATCH', input: { tableId: 'missing' } },
+    { label: 'missing table update', path: '/tables/missing', method: 'PUT', input: { label: 'Voisins', capacity: 8 } },
+    { label: 'missing table deletion', path: '/tables/missing', method: 'DELETE' },
   ]
 
   it.each(missingRequests)('returns 404 not_found for $label', async ({ path, method, input }) => {
@@ -278,6 +329,24 @@ describe('mock API conflicts and missing records', () => {
 })
 
 describe('API client', () => {
+  it('persists event-day mutations through the actual intercepted HTTP client', async () => {
+    const initial = await api.load()
+    const created = await api.addTable({ label: 'Table des voisins', capacity: 8 })
+    const table = created.tables.at(-1)
+    if (!table) throw new Error('Expected the new table.')
+    expect((await api.updateTable(table.id, { label: 'Table du quartier', capacity: 8 })).tables.at(-1)?.label).toBe('Table du quartier')
+    const assigned = await api.setTable('reservation-1', table.id)
+    expect(assigned.reservations[0].tableId).toBe(table.id)
+    const arrived = await api.setArrival('reservation-1', { arrivedAdults: 2, arrivedChildren: 1 })
+    expect(arrived.reservations[0]).toMatchObject({ arrivedAdults: 2, arrivedChildren: 1, tableId: table.id })
+    expect(await api.load()).toEqual(arrived)
+    await api.setTable('reservation-1', null)
+    expect((await api.deleteTable(table.id)).tables).toEqual(initial.tables)
+    const reset = await api.reset()
+    expect(reset.reservations).toEqual(initial.reservations)
+    expect(reset.tables).toEqual(initial.tables)
+  })
+
   it('loads and performs each mutation through the real intercepted fetch client', async () => {
     const initial = await api.load()
     expect(initial).toEqual(store.read())

@@ -30,7 +30,16 @@ export function createSeed(): Organizer {
       id: `reservation-${index + 1}`,
       totalCents: item.adults * 1800 + item.children * 1000,
       createdAt: `2026-10-0${Math.floor(index / 2) + 1}T14:00:00.000Z`,
+      arrivedAdults: 0,
+      arrivedChildren: 0,
+      tableId: null,
     })),
+    tables: [
+      { id: 'table-1', label: 'Table 1', capacity: 8 },
+      { id: 'table-2', label: 'Table 2', capacity: 16 },
+      { id: 'table-3', label: 'Table 3', capacity: 24 },
+      { id: 'table-4', label: 'Table 4', capacity: 24 },
+    ],
     shifts: [
       { id: 'kitchen', label: 'En cuisine', time: '15 h 30 – 18 h', required: 4 },
       { id: 'welcome', label: 'Accueil & billets', time: '17 h 30 – 20 h', required: 3 },
