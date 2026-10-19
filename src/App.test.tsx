@@ -1,10 +1,10 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { api } from './api'
 import { summarize } from './domain'
-import { server, store } from './test/server'
+import { store } from './test/server'
 
 async function open(section?: string) {
   const user = userEvent.setup()
@@ -115,9 +115,7 @@ describe('organizer interface', () => {
 
   it('surfaces API failure, keeps the entered form, and does not claim success', async () => {
     const user = await open('Réservations')
-    server.use(http.post('http://localhost/api/reservations', () => HttpResponse.json(
-      { code: 'demo_failure', error: 'Échec simulé : réessayez.' }, { status: 503 },
-    )))
+    vi.spyOn(api, 'addReservation').mockRejectedValueOnce(new Error('Échec simulé : réessayez.'))
     await user.type(screen.getByLabelText('Nom du contact'), 'Marie Demo')
     await user.type(screen.getByLabelText('Adresse courriel'), 'marie@example.test')
     await user.click(screen.getByRole('button', { name: 'Ajouter la réservation' }))
@@ -128,9 +126,7 @@ describe('organizer interface', () => {
   })
 
   it('recovers from a load error by retrying', async () => {
-    server.use(http.get('http://localhost/api/organizer', () => HttpResponse.json(
-      { code: 'demo_failure', error: 'Chargement indisponible.' }, { status: 503 },
-    ), { once: true }))
+    vi.spyOn(api, 'load').mockRejectedValueOnce(new Error('Chargement indisponible.'))
     const user = userEvent.setup()
     render(<App />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Chargement indisponible.')
