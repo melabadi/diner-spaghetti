@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import {
-  AlertCircle, CheckCircle2, HandHeart, Heart, LayoutDashboard, LoaderCircle,
+  AlertCircle, CheckCircle2, DoorOpen, HandHeart, Heart, LayoutDashboard, LoaderCircle,
   RotateCcw, Settings2, ShoppingBasket, Ticket, UtensilsCrossed,
 } from 'lucide-react'
 import { api } from './api'
 import { Budget } from './components/Budget'
 import { Dashboard, type Section } from './components/Dashboard'
 import { EventSettings } from './components/EventSettings'
+import { EventDay } from './components/EventDay'
 import { Reservations } from './components/Reservations'
 import { Volunteers } from './components/Volunteers'
 import { useOrganizer } from './useOrganizer'
@@ -17,6 +18,7 @@ const navigation = [
   { id: 'reservations', label: 'Réservations', icon: Ticket },
   { id: 'volunteers', label: 'Bénévoles', icon: HandHeart },
   { id: 'budget', label: 'Courses & budget', icon: ShoppingBasket },
+  { id: 'event-day', label: 'Jour J', icon: DoorOpen },
 ] as const
 
 const navPastaFacts = [
@@ -65,7 +67,7 @@ function App() {
       <main id="main-content" className="main-content" tabIndex={-1}>
         <div className="topbar"><span>LE QUARTIER SE MET À TABLE</span><div className="team-label"><span>Équipe organisatrice</span><span className="team-avatar" aria-hidden="true">ÉO</span></div></div>
         <header className="page-header">
-          <div><p className="eyebrow">UN PEU D’ORGANISATION, BEAUCOUP DE CONVIVIALITÉ</p><h1>{section === 'overview' ? data?.event.name || 'Dîner spaghetti' : navigation.find((item) => item.id === section)?.label}</h1><p className="muted">{section === 'overview' ? 'Tout est là pour préparer une soirée qui rassemble.' : section === 'reservations' ? 'Les invités, les billets et les petites attentions.' : section === 'volunteers' ? 'Une belle soirée, c’est d’abord une belle équipe.' : 'Des courses bien pensées, un budget bien suivi.'}</p></div>
+          <div><p className="eyebrow">UN PEU D’ORGANISATION, BEAUCOUP DE CONVIVIALITÉ</p><h1>{section === 'overview' ? data?.event.name || 'Dîner spaghetti' : navigation.find((item) => item.id === section)?.label}</h1><p className="muted">{section === 'overview' ? 'Tout est là pour préparer une soirée qui rassemble.' : section === 'reservations' ? 'Les invités, les billets et les petites attentions.' : section === 'volunteers' ? 'Une belle soirée, c’est d’abord une belle équipe.' : section === 'event-day' ? 'Accueillir les voisins et trouver une place pour chaque groupe.' : 'Des courses bien pensées, un budget bien suivi.'}</p></div>
           <div className="header-actions">
             <button className="button secondary reset-button" disabled={busy || loading} onClick={() => void reset()}><RotateCcw size={16} aria-hidden="true" />Réinitialiser</button>
             <button className="button secondary" disabled={!data || busy} aria-expanded={settingsOpen} aria-controls="event-settings" onClick={() => setSettingsOpen(!settingsOpen)}><Settings2 size={16} aria-hidden="true" />Paramètres</button>
@@ -82,6 +84,7 @@ function App() {
           {section === 'reservations' && <Reservations data={data} busy={busy} run={run} />}
           {section === 'volunteers' && <Volunteers data={data} busy={busy} run={run} />}
           {section === 'budget' && <Budget data={data} busy={busy} run={run} reportError={reportError} />}
+          {section === 'event-day' && <EventDay data={data} busy={busy} run={run} />}
         </>}
         <footer className="page-footer"><span>Fait pour les grandes tablées et les bonnes causes.</span><span>Démo locale · Montants en dollars canadiens</span></footer>
       </main>

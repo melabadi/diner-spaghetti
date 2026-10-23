@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import {
-  eventSchema, expenseInputSchema, normalizeText, organizerSchema, paymentSchema,
-  reservationInputSchema, summarize, volunteerInputSchema, type Organizer,
+  arrivalInputSchema, eventSchema, expenseInputSchema, normalizeText, organizerSchema, paymentSchema,
+  reservationInputSchema, seatingInputSchema, summarize, summarizeEventDay, tableInputSchema,
+  tableOccupancy, volunteerInputSchema, type Organizer, type TableInput,
 } from '../domain'
 import { createSeed } from './seed'
 
@@ -62,6 +63,9 @@ export class OrganizerStore {
       if (event.capacity < summarize(data).guests) {
         throw new ApiError(409, 'capacity_conflict', 'La capacité ne peut pas être inférieure au nombre de places déjà réservées.')
       }
+      if (event.capacity < summarizeEventDay(data).tableSeats) {
+        throw new ApiError(409, 'seating_capacity_conflict', 'Réduisez d’abord les places aux tables avant de réduire la capacité de la salle.')
+      }
       data.event = event
     })
   }
@@ -79,6 +83,9 @@ export class OrganizerStore {
         createdAt: new Date().toISOString(),
         // Existing reservations retain their sale price when event prices change.
         totalCents: reservation.adults * data.event.adultPriceCents + reservation.children * data.event.childPriceCents,
+        arrivedAdults: 0,
+        arrivedChildren: 0,
+        tableId: null,
       })
     })
   }
@@ -97,6 +104,68 @@ export class OrganizerStore {
       const index = data.reservations.findIndex((item) => item.id === id)
       if (index < 0) throw new ApiError(404, 'not_found', 'Cette réservation n’existe plus.')
       data.reservations.splice(index, 1)
+    })
+  }
+
+  setArrival(id: string, input: unknown) {
+    const arrival = arrivalInputSchema.parse(input)
+    return this.update((data) => {
+      const reservation = data.reservations.find((item) => item.id === id)
+      if (!reservation) throw new ApiError(404, 'not_found', 'Cette réservation n’existe plus.')
+      if (arrival.arrivedAdults > reservation.adults || arrival.arrivedChildren > reservation.children) {
+        throw new ApiError(409, 'arrival_conflict', 'Les arrivées ne peuvent pas dépasser les billets adultes ou enfants réservés.')
+      }
+      Object.assign(reservation, arrival)
+    })
+  }
+
+  setTable(id: string, input: unknown) {
+    const { tableId } = seatingInputSchema.parse(input)
+    return this.update((data) => {
+      const reservation = data.reservations.find((item) => item.id === id)
+      if (!reservation) throw new ApiError(404, 'not_found', 'Cette réservation n’existe plus.')
+      if (tableId !== null) {
+        const table = data.tables.find((item) => item.id === tableId)
+        if (!table) throw new ApiError(404, 'not_found', 'Cette table n’existe plus.')
+        const guests = reservation.adults + reservation.children
+        const occupied = tableOccupancy(data, tableId) - (reservation.tableId === tableId ? guests : 0)
+        if (occupied + guests > table.capacity) {
+          throw new ApiError(409, 'table_full', 'Cette table n’a pas assez de places pour tout le groupe.')
+        }
+      }
+      reservation.tableId = tableId
+    })
+  }
+
+  addTable(input: unknown) {
+    const table = tableInputSchema.parse(input)
+    return this.update((data) => {
+      this.checkTable(data, table)
+      data.tables.push({ ...table, id: crypto.randomUUID() })
+    })
+  }
+
+  updateTable(id: string, input: unknown) {
+    const table = tableInputSchema.parse(input)
+    return this.update((data) => {
+      const index = data.tables.findIndex((item) => item.id === id)
+      if (index < 0) throw new ApiError(404, 'not_found', 'Cette table n’existe plus.')
+      this.checkTable(data, table, id)
+      if (table.capacity < tableOccupancy(data, id)) {
+        throw new ApiError(409, 'table_capacity_conflict', 'Déplacez les groupes avant de réduire la capacité de cette table.')
+      }
+      data.tables[index] = { ...table, id }
+    })
+  }
+
+  deleteTable(id: string) {
+    return this.update((data) => {
+      const index = data.tables.findIndex((item) => item.id === id)
+      if (index < 0) throw new ApiError(404, 'not_found', 'Cette table n’existe plus.')
+      if (data.reservations.some((item) => item.tableId === id)) {
+        throw new ApiError(409, 'table_in_use', 'Déplacez les groupes avant de supprimer cette table.')
+      }
+      data.tables.splice(index, 1)
     })
   }
 
@@ -146,6 +215,16 @@ export class OrganizerStore {
       if (index < 0) throw new ApiError(404, 'not_found', 'Cet achat n’existe plus.')
       data.expenses.splice(index, 1)
     })
+  }
+
+  private checkTable(data: Organizer, table: TableInput, excludingId?: string) {
+    const others = data.tables.filter((item) => item.id !== excludingId)
+    if (others.some((item) => normalizeText(item.label) === normalizeText(table.label))) {
+      throw new ApiError(409, 'duplicate_table', 'Une table porte déjà ce nom.')
+    }
+    if (others.reduce((sum, item) => sum + item.capacity, 0) + table.capacity > data.event.capacity) {
+      throw new ApiError(409, 'seating_capacity_conflict', 'Les places aux tables ne peuvent pas dépasser la capacité de la salle.')
+    }
   }
 
   private update(change: (data: Organizer) => void) {

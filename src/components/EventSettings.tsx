@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Check, X } from 'lucide-react'
 import { api } from '../api'
-import { toCents, type EventSettings as DinnerSettings, type Organizer } from '../domain'
+import { summarizeEventDay, toCents, type EventSettings as DinnerSettings, type Organizer } from '../domain'
 import type { RunAction } from '../useOrganizer'
 import { Field, PanelHeading } from './ui'
 
@@ -16,6 +16,8 @@ export function EventSettings({ data, busy, run, reportError, close }: {
     budget: (data.event.budgetCents / 100).toFixed(2),
     goal: (data.event.goalCents / 100).toFixed(2),
   })
+  const eventDay = summarizeEventDay(data)
+  const minimumCapacity = Math.max(1, eventDay.totalGuests, eventDay.tableSeats)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -44,7 +46,7 @@ export function EventSettings({ data, busy, run, reportError, close }: {
             <Field label="Lieu"><input required minLength={2} maxLength={160} value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
             <Field label="Date du dîner"><input type="date" required value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field>
             <Field label="Heure"><input type="time" required value={form.time} onChange={(event) => setForm({ ...form, time: event.target.value })} /></Field>
-            <Field label="Capacité de la salle"><input type="number" required min={1} max={2000} value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} /></Field>
+            <Field label="Capacité de la salle" hint={`Au moins ${minimumCapacity} places pour les réservations et les tables configurées.`}><input type="number" required min={minimumCapacity} max={2000} value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} /></Field>
             <Field label="Billet adulte ($ CA)"><input type="number" required min={0} max={1_000_000} step="0.01" value={form.adultPrice} onChange={(event) => setForm({ ...form, adultPrice: event.target.value })} /></Field>
             <Field label="Billet enfant ($ CA)"><input type="number" required min={0} max={1_000_000} step="0.01" value={form.childPrice} onChange={(event) => setForm({ ...form, childPrice: event.target.value })} /></Field>
             <Field label="Budget de dépenses ($ CA)"><input type="number" required min={0} max={1_000_000} step="0.01" value={form.budget} onChange={(event) => setForm({ ...form, budget: event.target.value })} /></Field>

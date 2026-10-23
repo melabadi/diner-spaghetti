@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
-  type EventSettings, type ExpenseInput, type ReservationInput, type VolunteerInput,
+  type ArrivalInput, type EventSettings, type ExpenseInput, type ReservationInput,
+  type TableInput, type VolunteerInput,
 } from './domain'
 import { ApiError, OrganizerStore } from './mocks/store'
 
@@ -56,6 +57,19 @@ export async function request(path: string, options: RequestInit = {}) {
     if (method === 'DELETE' && segments[0] === 'reservations' && segments.length === 2) {
       return store.deleteReservation(recordId(segments))
     }
+    if (method === 'PUT' && segments[0] === 'reservations' && segments.length === 3 && segments[2] === 'arrival') {
+      return store.setArrival(recordId(segments), readBody(options.body))
+    }
+    if (method === 'PATCH' && segments[0] === 'reservations' && segments.length === 3 && segments[2] === 'table') {
+      return store.setTable(recordId(segments), readBody(options.body))
+    }
+    if (method === 'POST' && path === '/tables') return store.addTable(readBody(options.body))
+    if (method === 'PUT' && segments[0] === 'tables' && segments.length === 2) {
+      return store.updateTable(recordId(segments), readBody(options.body))
+    }
+    if (method === 'DELETE' && segments[0] === 'tables' && segments.length === 2) {
+      return store.deleteTable(recordId(segments))
+    }
     if (method === 'POST' && path === '/volunteers') return store.addVolunteer(readBody(options.body))
     if (method === 'DELETE' && segments[0] === 'volunteers' && segments.length === 2) {
       return store.deleteVolunteer(recordId(segments))
@@ -91,6 +105,13 @@ export const api = {
   setPayment: (id: string, paymentStatus: ReservationInput['paymentStatus']) =>
     request(`/reservations/${encodeURIComponent(id)}`, json('PATCH', { paymentStatus })),
   deleteReservation: (id: string) => request(`/reservations/${encodeURIComponent(id)}`, json('DELETE')),
+  setArrival: (id: string, arrival: ArrivalInput) =>
+    request(`/reservations/${encodeURIComponent(id)}/arrival`, json('PUT', arrival)),
+  setTable: (id: string, tableId: string | null) =>
+    request(`/reservations/${encodeURIComponent(id)}/table`, json('PATCH', { tableId })),
+  addTable: (table: TableInput) => request('/tables', json('POST', table)),
+  updateTable: (id: string, table: TableInput) => request(`/tables/${encodeURIComponent(id)}`, json('PUT', table)),
+  deleteTable: (id: string) => request(`/tables/${encodeURIComponent(id)}`, json('DELETE')),
   addVolunteer: (volunteer: VolunteerInput) => request('/volunteers', json('POST', volunteer)),
   deleteVolunteer: (id: string) => request(`/volunteers/${encodeURIComponent(id)}`, json('DELETE')),
   addExpense: (expense: ExpenseInput) => request('/expenses', json('POST', expense)),

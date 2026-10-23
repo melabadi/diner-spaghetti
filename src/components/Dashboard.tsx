@@ -2,10 +2,10 @@ import {
   ArrowRight, CalendarDays, Check, CircleDollarSign, Clock3, HandHeart,
   Heart, Leaf, MapPin, ShoppingBasket, Ticket, Users, WheatOff,
 } from 'lucide-react'
-import { formatDate, formatMoney, summarize, type Organizer } from '../domain'
+import { formatDate, formatMoney, summarize, summarizeEventDay, type Organizer } from '../domain'
 import { ActionLink, PanelHeading, Progress, StatCard } from './ui'
 
-export type Section = 'overview' | 'reservations' | 'volunteers' | 'budget'
+export type Section = 'overview' | 'reservations' | 'volunteers' | 'budget' | 'event-day'
 
 function SpaghettiIllustration() {
   return (
@@ -37,6 +37,7 @@ function SpaghettiIllustration() {
 
 export function Dashboard({ data, navigate }: { data: Organizer; navigate: (section: Section) => void }) {
   const summary = summarize(data)
+  const eventDay = summarizeEventDay(data)
   const outstanding = data.reservations.filter((item) => item.paymentStatus === 'pending').length
   const toBuy = data.expenses.filter((item) => !item.purchased).length
   const recent = [...data.reservations].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 3)
@@ -89,6 +90,11 @@ export function Dashboard({ data, navigate }: { data: Organizer; navigate: (sect
           <button className="next-action" onClick={() => navigate('budget')}>
             <span className="next-icon blue"><ShoppingBasket size={19} aria-hidden="true" /></span>
             <span><strong>{toBuy ? `${toBuy} achats à préparer` : 'La liste de courses est prête'}</strong><small>Les ingrédients d’une soirée réussie</small></span>
+            <ArrowRight size={17} aria-hidden="true" />
+          </button>
+          <button className="next-action" onClick={() => navigate('event-day')}>
+            <span className="next-icon green"><Users size={19} aria-hidden="true" /></span>
+            <span><strong>Préparer l’accueil et les tables</strong><small>{eventDay.arrivedGuests} / {eventDay.totalGuests} personnes accueillies · {eventDay.unassignedGuests} places à attribuer</small></span>
             <ArrowRight size={17} aria-hidden="true" />
           </button>
         </section>
