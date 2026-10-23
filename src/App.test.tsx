@@ -1,10 +1,10 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { api } from './api'
 import { summarize } from './domain'
-import { server, store } from './test/server'
+import { store } from './test/server'
 
 async function open(section?: string) {
   const user = userEvent.setup()
@@ -115,9 +115,7 @@ describe('organizer interface', () => {
 
   it('surfaces API failure, keeps the entered form, and does not claim success', async () => {
     const user = await open('Réservations')
-    server.use(http.post('http://localhost/api/reservations', () => HttpResponse.json(
-      { code: 'demo_failure', error: 'Échec simulé : réessayez.' }, { status: 503 },
-    )))
+    vi.spyOn(api, 'addReservation').mockRejectedValueOnce(new Error('Échec simulé : réessayez.'))
     await user.type(screen.getByLabelText('Nom du contact'), 'Marie Demo')
     await user.type(screen.getByLabelText('Adresse courriel'), 'marie@example.test')
     await user.click(screen.getByRole('button', { name: 'Ajouter la réservation' }))
@@ -128,9 +126,7 @@ describe('organizer interface', () => {
   })
 
   it('recovers from a load error by retrying', async () => {
-    server.use(http.get('http://localhost/api/organizer', () => HttpResponse.json(
-      { code: 'demo_failure', error: 'Chargement indisponible.' }, { status: 503 },
-    ), { once: true }))
+    vi.spyOn(api, 'load').mockRejectedValueOnce(new Error('Chargement indisponible.'))
     const user = userEvent.setup()
     render(<App />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Chargement indisponible.')
@@ -162,6 +158,7 @@ describe('event-day interface', () => {
   })
 
   it('records partial arrivals and retains them after a remount', async () => {
+    const confirm = vi.spyOn(window, 'confirm')
     const user = await open('Jour J')
     await user.click(screen.getByRole('button', { name: 'Accueillir Camille Roy' }))
     await user.clear(screen.getByLabelText('Adultes présents'))
@@ -170,6 +167,7 @@ describe('event-day interface', () => {
     await user.type(screen.getByLabelText('Enfants présents'), '1')
     await user.click(screen.getByRole('button', { name: 'Enregistrer l’arrivée' }))
     await screen.findByText('L’arrivée de Camille Roy a été mise à jour.')
+    expect(confirm).not.toHaveBeenCalled()
     expect(store.read().reservations[0]).toMatchObject({ arrivedAdults: 2, arrivedChildren: 1 })
     expect(screen.getByText('Personnes accueillies').closest('article')).toHaveTextContent('3 / 99')
     cleanup()
@@ -207,6 +205,54 @@ describe('event-day interface', () => {
     expect(store.read().reservations[0]).toMatchObject({
       arrivedAdults: 0, arrivedChildren: 0, paymentStatus: 'paid', tableId: 'table-1',
     })
+  })
+
+  it.each([
+    { label: 'adult-only', arrivedAdults: 3, arrivedChildren: 1 },
+    { label: 'child-only', arrivedAdults: 4, arrivedChildren: 0 },
+    { label: 'adult with a child increase', arrivedAdults: 3, arrivedChildren: 2 },
+    { label: 'child with an adult increase', arrivedAdults: 5, arrivedChildren: 0 },
+    { label: 'both counts to zero', arrivedAdults: 0, arrivedChildren: 0 },
+  ])('confirms $label decreases entered through the form before saving', async ({ arrivedAdults, arrivedChildren }) => {
+    store.setTable('reservation-1', { tableId: 'table-1' })
+    const before = store.setArrival('reservation-1', { arrivedAdults: 4, arrivedChildren: 1 })
+    const user = await open('Jour J')
+    await user.click(screen.getByRole('button', { name: 'Accueillir Camille Roy' }))
+    await user.clear(screen.getByLabelText('Adultes présents'))
+    await user.type(screen.getByLabelText('Adultes présents'), String(arrivedAdults))
+    await user.clear(screen.getByLabelText('Enfants présents'))
+    await user.type(screen.getByLabelText('Enfants présents'), String(arrivedChildren))
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const setArrival = vi.spyOn(api, 'setArrival')
+
+    await user.click(screen.getByRole('button', { name: 'Enregistrer l’arrivée' }))
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Camille Roy'))
+    expect(setArrival).not.toHaveBeenCalled()
+    expect(store.read()).toEqual(before)
+    expect(screen.getByLabelText('Adultes présents')).toHaveValue(arrivedAdults)
+    expect(screen.getByLabelText('Enfants présents')).toHaveValue(arrivedChildren)
+    expect(screen.queryByText('L’arrivée de Camille Roy a été mise à jour.')).not.toBeInTheDocument()
+
+    confirm.mockReturnValue(true)
+    await user.click(screen.getByRole('button', { name: 'Enregistrer l’arrivée' }))
+    await screen.findByText('L’arrivée de Camille Roy a été mise à jour.')
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(setArrival).toHaveBeenCalledExactlyOnceWith('reservation-1', { arrivedAdults, arrivedChildren })
+    expect(store.read().reservations[0]).toEqual({
+      ...before.reservations[0], arrivedAdults, arrivedChildren,
+    })
+  })
+
+  it('saves unchanged arrival counts without confirmation', async () => {
+    store.setArrival('reservation-1', { arrivedAdults: 4, arrivedChildren: 1 })
+    const user = await open('Jour J')
+    await user.click(screen.getByRole('button', { name: 'Accueillir Camille Roy' }))
+    const confirm = vi.spyOn(window, 'confirm')
+    await user.click(screen.getByRole('button', { name: 'Enregistrer l’arrivée' }))
+    await screen.findByText('L’arrivée de Camille Roy a été mise à jour.')
+    expect(confirm).not.toHaveBeenCalled()
+    expect(store.read().reservations[0]).toMatchObject({ arrivedAdults: 4, arrivedChildren: 1 })
   })
 
   it('searches without accents, filters partial arrivals, and announces empty results', async () => {
@@ -283,9 +329,7 @@ describe('event-day interface', () => {
   it('displays arrival failures without losing entered counts or claiming success', async () => {
     const user = await open('Jour J')
     await user.click(screen.getByRole('button', { name: 'Accueillir Camille Roy' }))
-    server.use(http.put('http://localhost/api/reservations/reservation-1/arrival', () => HttpResponse.json(
-      { code: 'demo_failure', error: 'L’accueil est indisponible.' }, { status: 503 },
-    )))
+    vi.spyOn(api, 'setArrival').mockRejectedValueOnce(new Error('L’accueil est indisponible.'))
     await user.clear(screen.getByLabelText('Adultes présents'))
     await user.type(screen.getByLabelText('Adultes présents'), '2')
     await user.click(screen.getByRole('button', { name: 'Enregistrer l’arrivée' }))
@@ -297,9 +341,7 @@ describe('event-day interface', () => {
 
   it('restores the existing assignment when the seating request fails', async () => {
     const user = await open('Jour J')
-    server.use(http.patch('http://localhost/api/reservations/reservation-1/table', () => HttpResponse.json(
-      { code: 'demo_failure', error: 'Le plan est indisponible.' }, { status: 503 },
-    )))
+    vi.spyOn(api, 'setTable').mockRejectedValueOnce(new Error('Le plan est indisponible.'))
     const selection = screen.getByRole('combobox', { name: 'Table pour Camille Roy' })
     await user.selectOptions(selection, 'table-1')
     expect(await screen.findByRole('alert')).toHaveTextContent('Le plan est indisponible.')

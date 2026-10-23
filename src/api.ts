@@ -1,40 +1,97 @@
 import { z } from 'zod'
 import {
-  organizerSchema,
   type ArrivalInput, type EventSettings, type ExpenseInput, type ReservationInput,
   type TableInput, type VolunteerInput,
 } from './domain'
+import { ApiError, OrganizerStore } from './mocks/store'
 
-const errorSchema = z.object({ error: z.string(), code: z.string() })
+const store = new OrganizerStore(window.localStorage)
+const latency = import.meta.env.MODE === 'test' ? 0 : 180
 
-export async function request(path: string, options: RequestInit = {}) {
-  const headers = new Headers(options.headers)
-  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  let response: Response
-  try {
-    response = await fetch(new URL(`/api${path}`, window.location.origin), { ...options, headers })
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error('Impossible de joindre le backend simulé. Rechargez la page et réessayez.', { cause: error })
-    }
-    throw error
+function abortError() {
+  return new DOMException('The operation was aborted.', 'AbortError')
+}
+
+async function wait(signal?: AbortSignal) {
+  if (signal?.aborted) throw abortError()
+  if (latency === 0) return
+  await new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(resolve, latency)
+    signal?.addEventListener('abort', () => {
+      window.clearTimeout(timer)
+      reject(abortError())
+    }, { once: true })
+  })
+}
+
+function readBody(body: BodyInit | null | undefined): unknown {
+  if (typeof body !== 'string') {
+    throw new ApiError(400, 'invalid_json', 'Le corps de la requête doit être du JSON valide.')
   }
-  let body: unknown
   try {
-    body = await response.json()
+    return JSON.parse(body)
   } catch (error) {
     if (error instanceof SyntaxError) {
-      throw new Error(`Le serveur n’a pas renvoyé de JSON valide (${response.status}). Rechargez la page et réessayez.`, { cause: error })
+      throw new ApiError(400, 'invalid_json', 'Le corps de la requête doit être du JSON valide.', { cause: error })
     }
     throw error
   }
-  if (!response.ok) {
-    const result = errorSchema.safeParse(body)
-    throw new Error(result.success ? result.data.error : `La requête a échoué (${response.status}).`)
+}
+
+function recordId(segments: string[]) {
+  return z.string().min(1).parse(decodeURIComponent(segments[1] || ''))
+}
+
+export async function request(path: string, options: RequestInit = {}) {
+  await wait(options.signal || undefined)
+  const method = (options.method || 'GET').toUpperCase()
+  const segments = path.split('/').filter(Boolean)
+
+  try {
+    if (method === 'GET' && path === '/organizer') return store.read()
+    if (method === 'PUT' && path === '/event') return store.updateEvent(readBody(options.body))
+    if (method === 'POST' && path === '/reservations') return store.addReservation(readBody(options.body))
+    if (method === 'PATCH' && segments[0] === 'reservations' && segments.length === 2) {
+      return store.setPayment(recordId(segments), readBody(options.body))
+    }
+    if (method === 'DELETE' && segments[0] === 'reservations' && segments.length === 2) {
+      return store.deleteReservation(recordId(segments))
+    }
+    if (method === 'PUT' && segments[0] === 'reservations' && segments.length === 3 && segments[2] === 'arrival') {
+      return store.setArrival(recordId(segments), readBody(options.body))
+    }
+    if (method === 'PATCH' && segments[0] === 'reservations' && segments.length === 3 && segments[2] === 'table') {
+      return store.setTable(recordId(segments), readBody(options.body))
+    }
+    if (method === 'POST' && path === '/tables') return store.addTable(readBody(options.body))
+    if (method === 'PUT' && segments[0] === 'tables' && segments.length === 2) {
+      return store.updateTable(recordId(segments), readBody(options.body))
+    }
+    if (method === 'DELETE' && segments[0] === 'tables' && segments.length === 2) {
+      return store.deleteTable(recordId(segments))
+    }
+    if (method === 'POST' && path === '/volunteers') return store.addVolunteer(readBody(options.body))
+    if (method === 'DELETE' && segments[0] === 'volunteers' && segments.length === 2) {
+      return store.deleteVolunteer(recordId(segments))
+    }
+    if (method === 'POST' && path === '/expenses') return store.addExpense(readBody(options.body))
+    if (method === 'PATCH' && segments[0] === 'expenses' && segments.length === 2) {
+      return store.setPurchased(recordId(segments), readBody(options.body))
+    }
+    if (method === 'DELETE' && segments[0] === 'expenses' && segments.length === 2) {
+      return store.deleteExpense(recordId(segments))
+    }
+    if (method === 'POST' && path === '/reset') return store.reset()
+    throw new ApiError(404, 'not_found', 'Cette route API n’existe pas.')
+  } catch (error) {
+    if (error instanceof z.ZodError) throw new Error(error.issues[0].message, { cause: error })
+    if (error instanceof ApiError) {
+      if (error.status >= 500) console.error('[local-api]', error)
+      throw new Error(error.message, { cause: error })
+    }
+    console.error('[local-api] Erreur inattendue', error)
+    throw new Error('Le backend simulé a rencontré une erreur. Réessayez.', { cause: error })
   }
-  const result = organizerSchema.safeParse(body)
-  if (!result.success) throw new Error('Le serveur a renvoyé des données invalides. Réessayez ou réinitialisez la démo.')
-  return result.data
 }
 
 function json(method: string, body?: unknown): RequestInit {

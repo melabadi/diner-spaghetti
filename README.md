@@ -58,53 +58,49 @@ reservations or resetting data.
 
 ## Mock backend
 
-[Mock Service Worker](https://mswjs.io/) supplies the request handlers.
-Its companion `@mswjs/interceptors` package intercepts browser `fetch` calls
-**in-page**, before React renders. The mock remains enabled in both development
-and production-preview builds. Responses have approximately 180 ms of simulated
-latency. Only this app's `/api/` requests are intercepted; other requests pass
-through normally.
+The [local API adapter](src/api.ts) calls a [local store](src/mocks/store.ts)
+directly in both development and production-preview builds, with approximately
+180 ms of simulated latency. It uses HTTP-shaped methods, paths, and JSON bodies
+inside the app, but makes no network requests and does not intercept `fetch`.
+No MSW dependency, service worker, or background backend server is required.
 
-No service worker or background server is required. In-page interception was
-chosen after browser testing found that API requests from backgrounded pages
-could bypass the service-worker mock and reach Vite. The mock now lives
-with the page instead of relying on a background worker or keepalive timers.
-
-[Handlers](src/mocks/handlers.ts) call a [local store](src/mocks/store.ts),
-which validates inputs and persisted data against [shared Zod schemas](src/domain.ts).
+The store validates inputs and persisted data against
+[shared Zod schemas](src/domain.ts).
 The state is stored under `la-tablee.organizer.v1` in `localStorage`.
 Existing datasets remain readable: absent arrival counts become zero, absent
 table assignments become `null`, and an absent table plan becomes an empty list.
 The next successful mutation persists those additive fields without resetting
 bookings, payments, or price snapshots.
-Invalid requests return HTTP 400, missing records return 404, capacity/assignment
-conflicts return 409, and storage failures return 500 with visible error messages.
+Validation, missing-record, capacity/assignment, and storage errors produce visible
+messages. Store errors retain their status and code in the thrown error's cause.
 Corrupt data is not silently discarded; an explicit reset recovers it.
 
-| Method | Route | Purpose |
+| Method | Local request path | Purpose |
 | --- | --- | --- |
-| GET | `/api/organizer` | Read the full organizer state |
-| PUT | `/api/event` | Update event settings |
-| POST | `/api/reservations` | Create a reservation |
-| PATCH / DELETE | `/api/reservations/:id` | Change payment / cancel |
-| PUT | `/api/reservations/:id/arrival` | Set absolute adult/child arrival counts |
-| PATCH | `/api/reservations/:id/table` | Assign the whole party or clear its table |
-| POST | `/api/tables` | Create a table |
-| PUT / DELETE | `/api/tables/:id` | Rename/resize a table or remove an empty table |
-| POST | `/api/volunteers` | Assign a volunteer |
-| DELETE | `/api/volunteers/:id` | Remove an assignment |
-| POST | `/api/expenses` | Add a shopping/budget item |
-| PATCH / DELETE | `/api/expenses/:id` | Mark purchased / delete |
-| POST | `/api/reset` | Restore sample data |
+| GET | `/organizer` | Read the full organizer state |
+| PUT | `/event` | Update event settings |
+| POST | `/reservations` | Create a reservation |
+| PATCH / DELETE | `/reservations/:id` | Change payment / cancel |
+| PUT | `/reservations/:id/arrival` | Set absolute adult/child arrival counts |
+| PATCH | `/reservations/:id/table` | Assign the whole party or clear its table |
+| POST | `/tables` | Create a table |
+| PUT / DELETE | `/tables/:id` | Rename/resize a table or remove an empty table |
+| POST | `/volunteers` | Assign a volunteer |
+| DELETE | `/volunteers/:id` | Remove an assignment |
+| POST | `/expenses` | Add a shopping/budget item |
+| PATCH / DELETE | `/expenses/:id` | Mark purchased / delete |
+| POST | `/reset` | Restore sample data |
 
 Mutating routes return the complete updated state. Money is stored as integer
 cents, not floating-point dollar amounts. The API client is isolated in
 [src/api.ts](src/api.ts), so a future real backend can replace the mock while
-preserving the same HTTP contract and validation.
+preserving the same method, path, body, and validation contracts.
 
 Arrival bodies contain `arrivedAdults` and `arrivedChildren`; repeating the same
 counts never adds guests twice. Arrivals may be partial and never mark a payment
-received. Seating bodies contain `tableId` (or `null` to unassign). Tables reserve
+received. Decreasing either count, including when the other increases, requires
+confirmation; cancelling leaves the saved counts unchanged.
+Seating bodies contain `tableId` (or `null` to unassign). Tables reserve
 space for the **entire booking**, not just its arrivals. An occupied table cannot
 be deleted or resized below its assigned guests, and total table capacity cannot
 exceed the venue capacity. These constraints also validate persisted data.
@@ -201,9 +197,9 @@ npm run typecheck
 npm run build
 ```
 
-Tests use Vitest, Testing Library, and the same MSW handlers as the browser.
+Tests use Vitest, Testing Library, and the same local API and store as the browser.
 They exercise domain calculations, input validation, capacity boundaries, price
-snapshots, persistence and storage errors, HTTP contracts, arrival corrections,
+snapshots, persistence and storage errors, local request contracts, arrival corrections,
 whole-party seating, complete report projections, and user-facing workflows.
 The [CI workflow](.github/workflows/ci.yml) runs tests, lint, and a production build
 on pushes to `main` and pull requests.

@@ -24,6 +24,7 @@
 .navigation button:hover { background: #f5f2eb; }
 .navigation button[aria-current='page'] { background: #f8eae1; color: #a34d34; }
 .nav-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--terracotta); margin-left: auto; }
+.nav-pasta-fact { margin: 18px 14px 0; color: #8a796b; font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-style: italic; line-height: 1.6; }
 .sidebar-bottom { margin-top: auto; padding-top: 50px; }
 .community-note { padding: 25px 16px; border: 1px solid #e6e8dc; border-radius: 12px; background: #f5f6ed; color: #66725f; }
 .community-note > svg { color: #86936f; margin-bottom: 13px; }

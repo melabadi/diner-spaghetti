@@ -21,9 +21,18 @@ const navigation = [
   { id: 'event-day', label: 'Jour J', icon: DoorOpen },
 ] as const
 
+const navPastaFacts = [
+  'Le mot «\u00a0spaghetti\u00a0» vient de l’italien spago, qui signifie «\u00a0ficelle\u00a0».',
+  'Il existe plusieurs centaines de formes de pâtes, chacune pensée pour retenir une sauce différente.',
+  'Les pâtes al dente sont légèrement fermes sous la dent après la cuisson.',
+  'En Italie, les pâtes sont traditionnellement servies comme primo, avant le plat principal.',
+  'Les rainures des rigatoni aident les sauces épaisses à mieux adhérer aux pâtes.',
+] as const
+
 function App() {
   const [section, setSection] = useState<Section>('overview')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [navPastaFact] = useState(() => navPastaFacts[Math.floor(Math.random() * navPastaFacts.length)])
   const { data, loading, busy, error, notice, run, reportError } = useOrganizer()
 
   function navigate(next: Section) {
@@ -48,6 +57,7 @@ function App() {
         <nav className="navigation" aria-label="Sections de l’organisateur">
           {navigation.map(({ id, label, icon: Icon }) => <button key={id} aria-current={section === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={19} aria-hidden="true" /><span>{label}</span>{section === id && <span className="nav-dot" />}</button>)}
         </nav>
+        <p className="nav-pasta-fact">{navPastaFact}</p>
         <div className="sidebar-bottom">
           <div className="community-note"><Heart size={23} aria-hidden="true" /><p>Les plus belles soirées<br />se préparent ensemble.</p></div>
           <div className="mock-badge"><span className="status-dot" /><div><strong>Démo · backend simulé</strong><span>Données dans ce navigateur</span></div></div>

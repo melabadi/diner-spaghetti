@@ -23,9 +23,13 @@ function ArrivalForm({ reservation, busy, run }: {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    await run(() => api.setArrival(reservation.id, {
+    const arrival = {
       arrivedAdults: Number(adults), arrivedChildren: Number(children),
-    }), `L’arrivée de ${reservation.name} a été mise à jour.`)
+    }
+    const decreases = arrival.arrivedAdults < reservation.arrivedAdults
+      || arrival.arrivedChildren < reservation.arrivedChildren
+    if (decreases && !window.confirm(`Réduire les arrivées de ${reservation.name} ? Le paiement et la table seront conservés.`)) return
+    await run(() => api.setArrival(reservation.id, arrival), `L’arrivée de ${reservation.name} a été mise à jour.`)
   }
 
   return (
