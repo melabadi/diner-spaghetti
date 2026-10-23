@@ -301,6 +301,46 @@ describe('event-day interface', () => {
     expect(store.read().tables).toHaveLength(5)
   })
 
+  it('keeps consecutive new-table defaults within the remaining venue capacity', async () => {
+    store.addTable({ label: 'Grande tablée', capacity: 96 })
+    const user = await open('Jour J')
+    const capacity = screen.getByLabelText('Places à la nouvelle table')
+    expect(capacity).toHaveValue(8)
+    await user.type(screen.getByLabelText('Nom de la nouvelle table'), 'Dernière grande table')
+    await user.click(screen.getByRole('button', { name: 'Ajouter la table' }))
+    await screen.findByRole('article', { name: 'Dernière grande table' })
+    expect(capacity).toHaveAttribute('max', '4')
+    expect(capacity).toHaveValue(4)
+    expect(capacity).toBeValid()
+    await user.type(screen.getByLabelText('Nom de la nouvelle table'), 'Dernière petite table')
+    await user.click(screen.getByRole('button', { name: 'Ajouter la table' }))
+    await screen.findByRole('article', { name: 'Dernière petite table' })
+    expect(store.read().tables.at(-1)?.capacity).toBe(4)
+    expect(screen.getByRole('button', { name: 'Ajouter la table' })).toBeDisabled()
+  })
+
+  it('initializes a new table within a small remaining venue capacity', async () => {
+    store.addTable({ label: 'Grande tablée', capacity: 104 })
+    await open('Jour J')
+    expect(screen.getByLabelText('Places à la nouvelle table')).toHaveValue(4)
+    expect(screen.getByLabelText('Places à la nouvelle table')).toBeValid()
+  })
+
+  it('clamps a new-table draft after another table grows without losing its name', async () => {
+    store.addTable({ label: 'Grande tablée', capacity: 96 })
+    const user = await open('Jour J')
+    await user.type(screen.getByLabelText('Nom de la nouvelle table'), 'Table en préparation')
+    await user.clear(screen.getByLabelText('Places à la nouvelle table'))
+    await user.type(screen.getByLabelText('Places à la nouvelle table'), '10')
+    await user.clear(screen.getByLabelText('Places à Table 1'))
+    await user.type(screen.getByLabelText('Places à Table 1'), '16')
+    await user.click(screen.getByRole('button', { name: 'Enregistrer Table 1' }))
+    await screen.findByText('La table Table 1 a été enregistrée.')
+    expect(screen.getByLabelText('Nom de la nouvelle table')).toHaveValue('Table en préparation')
+    expect(screen.getByLabelText('Places à la nouvelle table')).toHaveValue(4)
+    expect(screen.getByLabelText('Places à la nouvelle table')).toBeValid()
+  })
+
   it('renames and resizes a table without losing its groups', async () => {
     store.setTable('reservation-1', { tableId: 'table-1' })
     const user = await open('Jour J')

@@ -48,13 +48,19 @@ function TableEditor({ table, data, busy, run }: {
 
 function NewTable({ remaining, busy, run }: { remaining: number; busy: boolean; run: RunAction }) {
   const [label, setLabel] = useState('')
-  const [capacity, setCapacity] = useState('8')
+  const [capacity, setCapacity] = useState(String(Math.min(8, Math.max(1, remaining))))
+  const [previousRemaining, setPreviousRemaining] = useState(remaining)
+
+  if (remaining !== previousRemaining) {
+    setPreviousRemaining(remaining)
+    if (Number(capacity) > Math.max(1, remaining)) setCapacity(String(Math.max(1, remaining)))
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (await run(() => api.addTable({ label, capacity: Number(capacity) }), `La table ${label} a été ajoutée.`)) {
       setLabel('')
-      setCapacity('8')
+      setCapacity(String(Math.min(8, Math.max(1, remaining - Number(capacity)))))
     }
   }
 
