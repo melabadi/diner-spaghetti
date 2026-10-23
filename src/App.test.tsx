@@ -39,6 +39,27 @@ describe('organizer interface', () => {
     expect(screen.getByText('101 / 180')).toBeInTheDocument()
   })
 
+  it('keeps reservation controls in keyboard order in both directions', async () => {
+    const user = await open('Réservations')
+    const controls = [
+      'Nom du contact', 'Adresse courriel', 'Adultes', 'Enfants',
+      'Menus végétariens', 'Menus sans gluten', 'Statut du paiement',
+      'Un petit mot (facultatif)',
+    ].map((label) => screen.getByLabelText(label))
+
+    await user.click(controls.at(-1)!)
+    for (const control of controls.slice(0, -1).reverse()) {
+      await user.tab({ shift: true })
+      expect(control).toHaveFocus()
+    }
+    for (const control of controls.slice(1)) {
+      await user.tab()
+      expect(control).toHaveFocus()
+    }
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Ajouter la réservation' })).toHaveFocus()
+  })
+
   it('searches names without requiring accents and filters payment status', async () => {
     const user = await open('Réservations')
     await user.type(screen.getByRole('searchbox'), 'emile')
