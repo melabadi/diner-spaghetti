@@ -61,7 +61,7 @@ export function Dashboard({ data, navigate }: { data: Organizer; navigate: (sect
         <StatCard icon={Ticket} label="Places réservées" value={`${summary.guests} / ${data.event.capacity}`} detail={`${summary.availableSeats} places encore disponibles`} tone="orange" />
         <StatCard icon={CircleDollarSign} label="Recettes encaissées" value={formatMoney(summary.collectedCents)} detail={`${formatMoney(summary.pendingCents)} à encaisser`} />
         <StatCard icon={ShoppingBasket} label="Dépenses prévues" value={formatMoney(summary.expenseCents)} detail={`Budget de ${formatMoney(data.event.budgetCents)}`} tone="blue" />
-        <StatCard icon={HandHeart} label="Créneaux pourvus" value={`${data.volunteers.length} / ${summary.requiredVolunteers}`} detail={`${summary.openShifts} places bénévoles à combler`} tone="purple" />
+        <StatCard icon={HandHeart} label="Places bénévoles pourvues" value={`${data.volunteers.length} / ${summary.requiredVolunteers}`} detail={`${summary.openShifts} places bénévoles à combler`} tone="purple" />
       </div>
 
       <div className="dashboard-grid">

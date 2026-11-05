@@ -60,8 +60,9 @@ available.
 - **Reservations:** add contacts and adult/child tickets, capture vegetarian and
   gluten-free requirements, search with or without accents, filter by payment,
   mark payments received, and cancel a reservation after confirmation.
-- **Volunteers:** assign or remove people from four shifts. Full shifts and duplicate
-  assignments are rejected.
+- **Volunteers:** assign people to four shifts (the chosen shift stays selected for the
+  next person) and remove them after confirmation. Full shifts and duplicate assignments
+  are rejected.
 - **Shopping and budget:** add expenses with quantities and total estimated costs,
   mark purchases completed, and distinguish projected profit from cash on hand.
 - **Event settings:** edit the date, location, capacity, prices, spending limit, and
