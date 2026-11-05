@@ -14,6 +14,14 @@ async function open(section?: string) {
   return user
 }
 
+function fillEveryShift() {
+  for (const shift of store.read().shifts) {
+    while (store.read().volunteers.filter((item) => item.shiftId === shift.id).length < shift.required) {
+      store.addVolunteer({ name: `Renfort ${store.read().volunteers.length}`, shiftId: shift.id })
+    }
+  }
+}
+
 describe('organizer interface', () => {
   it('shows the actual seeded totals and clearly labels the mock backend', async () => {
     await open()
@@ -138,14 +146,23 @@ describe('organizer interface', () => {
   })
 
   it('explains why nobody can be added once every shift is full', async () => {
-    for (const shift of store.read().shifts) {
-      while (store.read().volunteers.filter((item) => item.shiftId === shift.id).length < shift.required) {
-        store.addVolunteer({ name: `Renfort ${store.read().volunteers.length}`, shiftId: shift.id })
-      }
-    }
+    fillEveryShift()
     await open('Bénévoles')
     expect(screen.getByLabelText('Créneau')).toHaveDisplayValue('Tous les créneaux sont complets')
     expect(screen.getByRole('button', { name: 'Inscrire le bénévole' })).toBeDisabled()
+  })
+
+  it('uses the singular when a single volunteer place is filled or open', async () => {
+    for (const item of store.read().volunteers.slice(1)) store.deleteVolunteer(item.id)
+    await open('Bénévoles')
+    expect(screen.getByText('1 place pourvue')).toBeInTheDocument()
+    cleanup()
+    fillEveryShift()
+    const [first] = store.read().volunteers
+    store.deleteVolunteer(first.id)
+    await open()
+    expect(screen.getByText('15 / 16')).toBeInTheDocument()
+    expect(screen.getAllByText('1 place bénévole à combler')).toHaveLength(2)
   })
 
   it('adds a budget item with exact cents and marks it purchased', async () => {

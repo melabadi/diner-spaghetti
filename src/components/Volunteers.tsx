@@ -11,6 +11,7 @@ export function Volunteers({ data, busy, run }: { data: Organizer; busy: boolean
   const nameInput = useRef<HTMLInputElement>(null)
   const refocusName = useRef(false)
   const summary = summarize(data)
+  const filled = data.volunteers.length
   const open = data.shifts.filter((shift) => data.volunteers.filter((item) => item.shiftId === shift.id).length < shift.required)
   const selected = open.find((shift) => shift.id === shiftId)
   const remaining = selected ? selected.required - data.volunteers.filter((item) => item.shiftId === selected.id).length : 0
@@ -36,7 +37,7 @@ export function Volunteers({ data, busy, run }: { data: Organizer; busy: boolean
 
   return (
     <div className="page-content">
-      <div className="section-summary"><HandHeart size={18} aria-hidden="true" /><strong>{data.volunteers.length} places pourvues</strong><span>sur {summary.requiredVolunteers} · {summary.openShifts} à combler</span></div>
+      <div className="section-summary"><HandHeart size={18} aria-hidden="true" /><strong>{filled} place{filled > 1 ? 's' : ''} pourvue{filled > 1 ? 's' : ''}</strong><span>sur {summary.requiredVolunteers} · {summary.openShifts} à combler</span></div>
       <div className="content-with-form">
         <section className="shift-grid" aria-label="Créneaux bénévoles">
           {data.shifts.map((shift) => {
