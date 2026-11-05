@@ -1,0 +1,21 @@
+# Repository configuration for the GitHub Copilot app.
+# Reference: https://docs.github.com/copilot/reference/github-copilot-app-reference/repository-configuration
+#
+# The app asks you to review and accept this file before it applies anything, and again after
+# every change made outside the app, even to whitespace or comments. Scripts receive your GitHub
+# credentials in their environment, so keep them to plain npm commands and never print variables.
+
+scripts:
+  # Runs when a session is created, so a fresh worktree can build and test straight away.
+  - name: Setup
+    command: npm ci
+    triggers:
+      - session.create
+  # Starts the dev server; the app opens the URL it prints in the integrated browser.
+  - name: Run
+    command: npm run dev
+  # Lint, typecheck, tests, and a production build in one command.
+  - name: Verify
+    command: npm run verify
+
+auto_open_in_browser: true

@@ -22,13 +22,18 @@ jobs:
       - uses: github/gh-aw/actions/setup-cli@bde367913adeb3132f0a171594c88a17f4b7d08c # v0.88.7
         with:
           version: v0.88.7
-      - name: Check compiled workflow is current
+      - name: Check compiled workflows are current
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git ls-files --error-unmatch .github/workflows/code-review.lock.yml .github/aw/actions-lock.json > /dev/null
-          gh aw compile code-review --strict --no-check-update
-          git diff --exit-code -- .github/workflows/code-review.lock.yml .github/aw/actions-lock.json .gitattributes
+          git ls-files --error-unmatch .github/workflows/code-review.lock.yml .github/workflows/issue-enrichment.lock.yml .github/aw/actions-lock.json > /dev/null
+          gh aw compile --strict --no-check-update
+          if [ -n "$(git status --porcelain -- .github)" ]; then
+            git status --short -- .github
+            git --no-pager diff -- .github
+            echo "::error::Compiled agentic workflows are stale. Run 'gh aw compile --strict' with gh-aw v0.88.7 and commit the result."
+            exit 1
+          fi
 
   check:
     runs-on: ubuntu-latest
@@ -42,3 +47,5 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Validate demo backlog seeds
+        run: node demo/reset.mjs --validate

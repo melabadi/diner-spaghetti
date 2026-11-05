@@ -132,7 +132,7 @@ clean bill of health.
 ### 1. Understand the change and contracts
 
 Read `README.md`, `package.json`, changed files in full, and the related callers,
-schemas, request handlers, state transitions, and tests. Map the intended behavior
+schemas, the request layer, state transitions, and tests. Map the intended behavior
 and affected surfaces before forming conclusions. Include configuration,
 dependencies, workflows, renames, and deletions; do not apply path exclusions.
 
@@ -143,8 +143,9 @@ these contracts unless the PR deliberately and consistently changes them:
 - Capacity, dietary counts, and volunteer assignments are validated. Dietary
   counts may overlap, and one volunteer may work multiple shifts.
 - Shared Zod schemas validate requests and persisted organizer data.
-- MSW intercepts only this app's `/api/` requests in-page; unrelated requests
-  pass through. Mutation responses contain the complete updated organizer state.
+- `src/api.ts` routes REST-style requests straight to the in-browser
+  `OrganizerStore` (localStorage); there is no network layer. Every mutation
+  returns the complete updated organizer state.
 - Corrupt storage and storage failures remain visible; they are not silently
   discarded or reset.
 - User-facing text and formatting remain Canadian French (`fr-CA`) and CAD.
@@ -159,7 +160,7 @@ Do not report these pre-existing demo limitations as new defects.
 
 Follow changed behavior end-to-end through its callers and consumers. Check
 boundary values, monetary calculations, stale state, async races, persistence,
-validation, HTTP contracts, and error propagation. Examine both successful and
+validation, request/response contracts, and error propagation. Examine both successful and
 failing paths. Check whether tests actually exercise the changed behavior and
 whether a regression affects a user-visible workflow.
 
