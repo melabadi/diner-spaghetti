@@ -14,6 +14,14 @@ async function open(section?: string) {
   return user
 }
 
+function fillEveryShift() {
+  for (const shift of store.read().shifts) {
+    while (store.read().volunteers.filter((item) => item.shiftId === shift.id).length < shift.required) {
+      store.addVolunteer({ name: `Renfort ${store.read().volunteers.length}`, shiftId: shift.id })
+    }
+  }
+}
+
 describe('organizer interface', () => {
   it('shows the actual seeded totals and clearly labels the mock backend', async () => {
     await open()
@@ -69,15 +77,92 @@ describe('organizer interface', () => {
     expect(summarize(store.read()).guests).toBe(91)
   })
 
-  it('adds and removes a volunteer from a shift', async () => {
+  it('adds a volunteer to the chosen shift and only removes them after confirmation', async () => {
     const user = await open('Bénévoles')
     await user.type(screen.getByLabelText('Nom du bénévole'), 'Julie Demo')
+    await user.selectOptions(screen.getByLabelText('Créneau'), 'kitchen')
     await user.click(screen.getByRole('button', { name: 'Inscrire le bénévole' }))
     await screen.findByText('Julie Demo')
     expect(store.read().volunteers).toHaveLength(9)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await user.click(screen.getByRole('button', { name: 'Retirer Julie Demo du créneau En cuisine' }))
+    expect(confirm).toHaveBeenCalledWith('Retirer Julie Demo du créneau « En cuisine » ?')
+    expect(store.read().volunteers).toHaveLength(9)
+    confirm.mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: 'Retirer Julie Demo du créneau En cuisine' }))
     await waitFor(() => expect(screen.queryByText('Julie Demo')).not.toBeInTheDocument())
     expect(store.read().volunteers).toHaveLength(8)
+    expect(within(screen.getByRole('main')).getByRole('status')).toHaveTextContent('Julie Demo ne fait plus partie du créneau « En cuisine ».')
+  })
+
+  it('keeps the chosen shift and the focus so several volunteers can be added in a row', async () => {
+    const user = await open('Bénévoles')
+    const name = screen.getByLabelText('Nom du bénévole')
+    const shift = screen.getByLabelText('Créneau')
+    expect(shift).toHaveValue('')
+    await user.type(name, 'Marc Dion')
+    await user.selectOptions(shift, 'service')
+    expect(screen.getByText('Il reste 3 places dans ce créneau.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Inscrire le bénévole' }))
+    await waitFor(() => expect(name).toHaveFocus())
+    expect(within(screen.getByRole('main')).getByRole('status')).toHaveTextContent('Marc Dion rejoint le créneau « Service aux tables ».')
+    expect(shift).toHaveValue('service')
+    expect(screen.getByText('Il reste 2 places dans ce créneau.')).toBeInTheDocument()
+    await user.keyboard('Lise Bérubé{Enter}')
+    await screen.findByText('Lise Bérubé')
+    expect(store.read().volunteers.slice(-2).map((item) => [item.name, item.shiftId])).toEqual([['Marc Dion', 'service'], ['Lise Bérubé', 'service']])
+    expect(name).toHaveFocus()
+    expect(name).toHaveValue('')
+  })
+
+  it('asks for another shift once the chosen one is full', async () => {
+    const user = await open('Bénévoles')
+    const shift = screen.getByLabelText('Créneau')
+    await user.type(screen.getByLabelText('Nom du bénévole'), 'Marc Dion')
+    await user.selectOptions(shift, 'welcome')
+    expect(screen.getByText('Il reste 1 place dans ce créneau.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Inscrire le bénévole' }))
+    await screen.findByText('Marc Dion')
+    expect(within(screen.getByRole('main')).getByRole('status')).toHaveTextContent('Marc Dion rejoint le créneau « Accueil & billets », qui est maintenant complet.')
+    expect(shift).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'Accueil & billets · 17 h 30 – 20 h · complet' })).toBeDisabled()
+    await user.keyboard('Lise Bérubé{Enter}')
+    expect(shift).toBeInvalid()
+    expect(screen.queryByText('Lise Bérubé')).not.toBeInTheDocument()
+    expect(store.read().volunteers).toHaveLength(9)
+  })
+
+  it('keeps the name and shift when that person is already on the shift', async () => {
+    const user = await open('Bénévoles')
+    const name = screen.getByLabelText('Nom du bénévole')
+    await user.type(name, 'Sophie Tremblay')
+    await user.selectOptions(screen.getByLabelText('Créneau'), 'kitchen')
+    await user.click(screen.getByRole('button', { name: 'Inscrire le bénévole' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cette personne est déjà inscrite à ce créneau.')
+    await waitFor(() => expect(name).toHaveFocus())
+    expect(name).toHaveValue('Sophie Tremblay')
+    expect(screen.getByLabelText('Créneau')).toHaveValue('kitchen')
+    expect(store.read().volunteers).toHaveLength(8)
+  })
+
+  it('explains why nobody can be added once every shift is full', async () => {
+    fillEveryShift()
+    await open('Bénévoles')
+    expect(screen.getByLabelText('Créneau')).toHaveDisplayValue('Tous les créneaux sont complets')
+    expect(screen.getByRole('button', { name: 'Inscrire le bénévole' })).toBeDisabled()
+  })
+
+  it('uses the singular when a single volunteer place is filled or open', async () => {
+    for (const item of store.read().volunteers.slice(1)) store.deleteVolunteer(item.id)
+    await open('Bénévoles')
+    expect(screen.getByText('1 place pourvue')).toBeInTheDocument()
+    cleanup()
+    fillEveryShift()
+    const [first] = store.read().volunteers
+    store.deleteVolunteer(first.id)
+    await open()
+    expect(screen.getByText('15 / 16')).toBeInTheDocument()
+    expect(screen.getAllByText('1 place bénévole à combler')).toHaveLength(2)
   })
 
   it('adds a budget item with exact cents and marks it purchased', async () => {

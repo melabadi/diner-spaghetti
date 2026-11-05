@@ -41,6 +41,8 @@ export function Dashboard({ data, navigate }: { data: Organizer; navigate: (sect
   const toBuy = data.expenses.filter((item) => !item.purchased).length
   const recent = [...data.reservations].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 3)
   const goalPercent = Math.max(0, Math.round(summary.projectedNetCents / data.event.goalCents * 100))
+  const plural = summary.openShifts > 1 ? 's' : ''
+  const openPlaces = `${summary.openShifts} place${plural} bénévole${plural} à combler`
 
   return (
     <div className="page-content">
@@ -61,7 +63,7 @@ export function Dashboard({ data, navigate }: { data: Organizer; navigate: (sect
         <StatCard icon={Ticket} label="Places réservées" value={`${summary.guests} / ${data.event.capacity}`} detail={`${summary.availableSeats} places encore disponibles`} tone="orange" />
         <StatCard icon={CircleDollarSign} label="Recettes encaissées" value={formatMoney(summary.collectedCents)} detail={`${formatMoney(summary.pendingCents)} à encaisser`} />
         <StatCard icon={ShoppingBasket} label="Dépenses prévues" value={formatMoney(summary.expenseCents)} detail={`Budget de ${formatMoney(data.event.budgetCents)}`} tone="blue" />
-        <StatCard icon={HandHeart} label="Créneaux pourvus" value={`${data.volunteers.length} / ${summary.requiredVolunteers}`} detail={`${summary.openShifts} places bénévoles à combler`} tone="purple" />
+        <StatCard icon={HandHeart} label="Places bénévoles pourvues" value={`${data.volunteers.length} / ${summary.requiredVolunteers}`} detail={openPlaces} tone="purple" />
       </div>
 
       <div className="dashboard-grid">
@@ -83,7 +85,7 @@ export function Dashboard({ data, navigate }: { data: Organizer; navigate: (sect
           </button>
           <button className="next-action" onClick={() => navigate('volunteers')}>
             <span className="next-icon purple"><Users size={19} aria-hidden="true" /></span>
-            <span><strong>{summary.openShifts ? `${summary.openShifts} places bénévoles à combler` : 'L’équipe est au complet'}</strong><small>Cuisine, accueil, service et rangement</small></span>
+            <span><strong>{summary.openShifts ? openPlaces : 'L’équipe est au complet'}</strong><small>Cuisine, accueil, service et rangement</small></span>
             <ArrowRight size={17} aria-hidden="true" />
           </button>
           <button className="next-action" onClick={() => navigate('budget')}>
